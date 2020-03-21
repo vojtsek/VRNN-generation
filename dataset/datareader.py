@@ -8,7 +8,7 @@ from utils import tokenize
 
 class DataReader:
 
-    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.6):
+    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.8, valid=.1):
         self._dialogues = []
         self.max_dial_len = 0
         self.max_turn_len = 0
@@ -21,6 +21,7 @@ class DataReader:
             self.reader = reader
             self._parse_data(data)
         self.train = train
+        self.valid = valid
         self.permutation = list(range(len(self._dialogues)))
 
     def permute(self, seed=0):
@@ -69,12 +70,19 @@ class DataReader:
     @property
     def test_set(self):
         train_size = round(self.train * self.length)
-        return self._turns(self.dialogues[train_size:])
+        valid_size = round(self.valid * self.length)
+        return self.dialogues[train_size+valid_size:]
 
     @property
     def train_set(self):
         train_size = round(self.train * self.length)
-        return self._turns(self.dialogues[:train_size])
+        return self.dialogues[:train_size]
+
+    @property
+    def valid_set(self):
+        train_size = round(self.train * self.length)
+        valid_size = round(self.valid * self.length)
+        return self.dialogues[train_size:train_size+valid_size]
     
     def user_utterances(self):
         for t in self.turns:

@@ -2,23 +2,22 @@ import copy
 import torch
 from torch.utils.data import Dataset as TorchDataset
 
-from .datareader import DataReader
 from .embedding import Embeddings
 from ..utils import pad_dial
 
 
 class Dataset(TorchDataset):
-    def __init__(self, reader: DataReader, transform=None):
-        self.reader = reader
+    def __init__(self, dialogues: [], transform=None):
+        self.dialogues = dialogues
         self.transform = transform
 
     def __len__(self):
-        return self.reader.length
+        return len(self.dialogues)
 
     def __getitem__(self, idx):
         if torch.is_tensor(idx):
             idx = idx.tolist()
-        sample = copy.deepcopy(self.reader.dialogues[idx])
+        sample = copy.deepcopy(self.dialogues[idx])
         if self.transform:
             sample = self.transform(sample)
         return sample

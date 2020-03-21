@@ -26,10 +26,14 @@ def main(flags):
                                                 data_reader.max_dial_len,
                                                 data_reader.max_turn_len),
                                         ToTensor()])
-    dataset = Dataset(data_reader, transform=composed_transforms)
-    data_loader = TorchDataLoader(dataset, batch_size=4, shuffle=True)
+    train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)
+    valid_dataset = Dataset(data_reader.valid_set, transform=composed_transforms)
+    test_dataset = Dataset(data_reader.test_set, transform=composed_transforms)
+    train_loader = TorchDataLoader(train_dataset, batch_size=flags.batch_size, shuffle=True)
+    valid_loader = TorchDataLoader(valid_dataset, batch_size=flags.batch_size, shuffle=True)
+    test_loader = TorchDataLoader(test_dataset, batch_size=flags.batch_size, shuffle=True)
 
-    for i, sample_batch in enumerate(data_loader):
+    for i, sample_batch in enumerate(train_loader):
         print(i, sample_batch['dialogue'].shape)
 
 
@@ -41,6 +45,8 @@ if __name__ == '__main__':
     parser.add_argument('--data_type', type=str, default='raw')
     parser.add_argument('--embedding_fn', type=str)
     parser.add_argument('--output', type=str)
+    parser.add_argument('--batch_size', type=int, default=4)
+
     args = parser.parse_args()
 
     main(args)
