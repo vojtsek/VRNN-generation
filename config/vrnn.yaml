@@ -1,0 +1,6 @@
+data_type: 'raw'
+data_fn: 'VRNN/data/CamRest676.json'
+domain: 'camrest'
+embedding_fn: 'VRNN/data/embeddings/fasttext-fake.vec'
+hidden_size: 100
+batch_size: 4

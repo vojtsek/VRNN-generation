@@ -1,5 +1,5 @@
 import pickle
-from collections import Counter, defaultdict
+from collections import Counter
 
 import numpy
 
@@ -82,7 +82,7 @@ class DataReader:
     def valid_set(self):
         train_size = round(self.train * self.length)
         valid_size = round(self.valid * self.length)
-        return self.dialogues[train_size:train_size+valid_size]
+        return self.dialogues[train_size:(train_size+valid_size)]
     
     def user_utterances(self):
         for t in self.turns:

@@ -1,5 +1,6 @@
 import copy
 import torch
+import numpy as np
 from torch.utils.data import Dataset as TorchDataset
 
 from .embedding import Embeddings
@@ -44,10 +45,32 @@ class Padding(object):
 
     def __call__(self, sample):
         user_turns = [t.user for t in sample.turns]
-        return pad_dial(user_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
+        system_turns = [t.system for t in sample.turns]
+        user_padded_dial, user_turn_lens = pad_dial(
+            user_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
+        system_padded_dial, system_turn_lens = pad_dial(
+            system_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
+        return {
+            'user_dials': user_padded_dial,
+            'system_dials': system_padded_dial,
+            'user_turn_lens': user_turn_lens,
+            'system_turn_lens': system_turn_lens,
+            'dial_len': np.array(len(sample.turns))
+        }
 
 
 class ToTensor(object):
 
     def __call__(self, sample):
-        return {'dialogue': sample}
+        # return {
+        #     'user_dials': torch.from_numpy(sample['user_dials']),
+        #     'system_dials': torch.from_numpy(sample['system_dials']),
+        #     'user_turn_lens': torch.from_numpy(sample['user_turn_lens']),
+        #     'system_turn_lens': torch.from_numpy(sample['system_turn_lens']),
+        #     'dial_len': torch.from_numpy(sample['dial_len'])
+        # }
+        return (torch.from_numpy(sample['user_dials']),
+                torch.from_numpy(sample['system_dials']),
+                torch.from_numpy(sample['user_turn_lens']),
+                torch.from_numpy(sample['system_turn_lens']),
+                torch.from_numpy(sample['dial_len']))

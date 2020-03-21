@@ -1,26 +1,32 @@
 import argparse
 import json
 
+import yaml
 from torchvision.transforms import Compose as TorchCompose
 from torch.utils.data import DataLoader as TorchDataLoader
+import pytorch_lightning as pl
+
 from .dataset.datareader import DataReader, CamRestReader, MultiWOZReader
 from .dataset.dataset import Dataset, ToTensor, Padding, WordToInt
 from .dataset.embedding import Embeddings
+from .model.VRNN import VRNN
 
 
 def main(flags):
-    if flags.data_type == 'raw':
-        with open(flags.data_fn, 'rt') as infd:
-            data = json.load(infd)
-        if flags.domain == 'camrest':
+    with open(flags.config, 'rt') as in_fd:
+        config = yaml.load(in_fd, Loader=yaml.FullLoader)
+    if config['data_type'] == 'raw':
+        with open(config['data_fn'], 'rt') as in_fd:
+            data = json.load(in_fd)
+        if config['domain'] == 'camrest':
             reader = CamRestReader()
-        elif flags.domain == 'woz-hotel':
+        elif config['domain'] == 'woz-hotel':
             reader = MultiWOZReader(['hotel'])
         data_reader = DataReader(data=data, reader=reader)
     else:
-        data_reader = DataReader(saved_dialogues=flags.data_fn)
+        data_reader = DataReader(saved_dialogues=config['data_fn'])
 
-    embeddings = Embeddings(flags.embedding_fn)
+    embeddings = Embeddings(config['embedding_fn'])
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
@@ -29,22 +35,27 @@ def main(flags):
     train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)
     valid_dataset = Dataset(data_reader.valid_set, transform=composed_transforms)
     test_dataset = Dataset(data_reader.test_set, transform=composed_transforms)
-    train_loader = TorchDataLoader(train_dataset, batch_size=flags.batch_size, shuffle=True)
-    valid_loader = TorchDataLoader(valid_dataset, batch_size=flags.batch_size, shuffle=True)
-    test_loader = TorchDataLoader(test_dataset, batch_size=flags.batch_size, shuffle=True)
+    train_loader = TorchDataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
+    valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
+    test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
+    model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
+    trainer = pl.Trainer()
+    trainer.fit(model)
 
-    for i, sample_batch in enumerate(train_loader):
-        print(i, sample_batch['dialogue'].shape)
+    for i, sample_batch in enumerate(valid_loader):
+        user_dials, system_dials, user_lens, system_lens, dial_lens = sample_batch
+        print(i, user_dials.shape,
+              user_lens.shape,
+              user_lens,
+              dial_lens
+              )
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('--data_fn', type=str)
-    parser.add_argument('--domain', type=str, default='camrest')
-    parser.add_argument('--data_type', type=str, default='raw')
-    parser.add_argument('--embedding_fn', type=str)
     parser.add_argument('--output', type=str)
+    parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=4)
 
     args = parser.parse_args()

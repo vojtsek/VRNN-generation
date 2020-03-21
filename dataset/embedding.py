@@ -17,6 +17,9 @@ class Embeddings:
             else:
                 return self.dct[Embeddings.UNK]
 
+        def __len__(self):
+            return len(self.dct)
+
     PAD = '<PAD>'
     EOS = '<EOS>'
     BOS = '<BOS>'
