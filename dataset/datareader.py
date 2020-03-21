@@ -1,11 +1,17 @@
 import pickle
+from collections import Counter, defaultdict
+
 import numpy
 
-from collections import Counter
+from utils import tokenize
 
 
 class DataReader:
+
     def __init__(self, data=None, reader=None, saved_dialogues=None, train=.6):
+        self._dialogues = []
+        self.max_dial_len = 0
+        self.max_turn_len = 0
         if saved_dialogues is not None:
             with open(saved_dialogues, 'rb') as fd:
                 print('Loading data from "{}"'.format(saved_dialogues))
@@ -29,7 +35,10 @@ class DataReader:
         return dials
 
     def _parse_data(self, data):
-        self._dialogues = [d for d in self.reader.parse_dialogues(data)]
+        for d in self.reader.parse_dialogues(data):
+            self._dialogues.append(d)
+            self.max_dial_len = max(self.max_dial_len, len(d.turns))
+            self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
         self.length = len(self._dialogues)
 
     def apply_to_dialogues(self, fun):
@@ -96,10 +105,10 @@ class Turn:
         self.intent = None
     
     def add_user(self, utt):
-        self.user = utt
+        self.user = tokenize(utt)
 
     def add_system(self, utt):
-        self.system = utt
+        self.system = tokenize(utt)
 
     def add_usr_slu(self, usr_slu):
         self.usr_slu = usr_slu
