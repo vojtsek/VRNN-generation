@@ -2,5 +2,17 @@ data_type: 'raw'
 data_fn: 'VRNN/data/CamRest676.json'
 domain: 'camrest'
 embedding_fn: 'VRNN/data/embeddings/fasttext-fake.vec'
-hidden_size: 100
 batch_size: 4
+drop_prob: 0.7
+input_encoder_hidden_size: 100
+vrnn_hidden_size: 100
+posterior_ff_sizes1:
+  - 400
+  - 200
+posterior_ff_sizes2:
+  - 200
+  - 200
+prior_ff_sizes:
+  - 100
+  - 100
+z_logits_dim: 50

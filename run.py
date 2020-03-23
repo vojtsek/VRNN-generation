@@ -9,7 +9,7 @@ import pytorch_lightning as pl
 from .dataset.datareader import DataReader, CamRestReader, MultiWOZReader
 from .dataset.dataset import Dataset, ToTensor, Padding, WordToInt
 from .dataset.embedding import Embeddings
-from .model.VRNN import VRNN
+from .model.vrnn import VRNN
 
 
 def main(flags):
@@ -41,14 +41,6 @@ def main(flags):
     model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
     trainer = pl.Trainer()
     trainer.fit(model)
-
-    for i, sample_batch in enumerate(valid_loader):
-        user_dials, system_dials, user_lens, system_lens, dial_lens = sample_batch
-        print(i, user_dials.shape,
-              user_lens.shape,
-              user_lens,
-              dial_lens
-              )
 
 
 if __name__ == '__main__':
