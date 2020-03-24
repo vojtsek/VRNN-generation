@@ -1,11 +1,18 @@
+# data settings
 data_type: 'raw'
 data_fn: 'VRNN/data/CamRest676.json'
 domain: 'camrest'
 embedding_fn: 'VRNN/data/embeddings/fasttext-fake.vec'
+# general settings
 batch_size: 4
 drop_prob: 0.7
+bidirectional_encoder: true
+gumbel_softmax_tmp: 0.8
+# layer sizes
 input_encoder_hidden_size: 100
-vrnn_hidden_size: 100
+utterance_decoder_hidden_size: 100
+decoder_hidden_size: 100
+vrnn_hidden_size: 150
 posterior_ff_sizes1:
   - 400
   - 200

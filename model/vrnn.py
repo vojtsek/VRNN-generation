@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader
 
 from . import VAECell
 from ..dataset.embedding import Embeddings
+from ..utils import zero_hidden
 
 
 class VRNN(pl.LightningModule):
@@ -24,8 +25,14 @@ class VRNN(pl.LightningModule):
         self._valid_loader = valid_loader
         self._test_loader = test_loader
 
+        # input is 'projected z sample' concat user and system encoded
+        # hidden is configured
+        self.vrnn_cell = torch.nn.LSTMCell(
+            config['posterior_ff_sizes2'][-1] +
+            config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
+            config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
-        self.vae_cell = VAECell(self.embeddings_matrix, self.config)
+        self.vae_cell = VAECell(self.embeddings_matrix, self.vrnn_cell, self.config)
 
     def forward(self, user_dials, system_dials, user_lens, system_lens, dial_lens):
         batch_sort_perm = reversed(np.argsort(dial_lens))
@@ -44,18 +51,19 @@ class VRNN(pl.LightningModule):
         system_lens_data, _, __, ___ = \
             pack_padded_sequence(system_lens, dial_lens, enforce_sorted=False)
 
-        initial_hidden = self.zero_hidden((2,
-                                           self.config['batch_size'],
-                                           self.config['vrnn_hidden_size']))
-        initial_z = self.zero_hidden((self.config['batch_size'],
-                                      self.config['z_logits_dim']))
+        initial_hidden = zero_hidden((2,
+                                      self.config['batch_size'],
+                                      self.config['vrnn_hidden_size']))
+        initial_z = zero_hidden((self.config['batch_size'],
+                                 self.config['z_logits_dim']))
 
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
         z_latent = initial_z
-        output = []
+        user_outputs = []
+        q_zs, p_zs = [], []
         for bs in batch_sizes:
-            out, vrnn_hidden_state, z_latent =\
+            decoded_user_outputs, vrnn_hidden_state, q_z, p_z =\
                 self.vae_cell(user_dials_data[offset:offset+bs],
                               user_lens_data[offset:offset+bs],
                               system_dials_data[offset:offset+bs],
@@ -63,12 +71,19 @@ class VRNN(pl.LightningModule):
                               (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                               z_latent[:bs])
             offset += bs
-            output.extend(out)
+            user_outputs.append(decoded_user_outputs)
+            q_zs.extend(q_z)
+            p_zs.extend(p_z)
 
-        output, lens = pad_packed_sequence(PackedSequence(
-            torch.stack(output), batch_sizes, sorted_indices, unsorted_indices))
-        print(output.shape, lens, dial_lens)
-        return user_dials
+        q_zs, lens = pad_packed_sequence(PackedSequence(
+            torch.stack(q_zs), batch_sizes, sorted_indices, unsorted_indices))
+        p_zs, lens = pad_packed_sequence(PackedSequence(
+            torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
+        user_dials, lens = pad_packed_sequence(PackedSequence(
+            user_dials_data, batch_sizes, sorted_indices, unsorted_indices))
+        print(q_zs.shape, user_dials.shape)
+
+        return user_dials, q_zs, p_zs
 
     def cross_entropy_loss(self, logits, labels):
         return F.nll_loss(logits, labels)
@@ -76,11 +91,9 @@ class VRNN(pl.LightningModule):
     def training_step(self, train_batch, batch_idx):
         user_dials, system_dials, user_lens, system_lens, dial_lens = train_batch
         zeros = torch.from_numpy(np.zeros((user_dials.shape[0]), dtype=np.int64))
-        ones = torch.from_numpy(np.ones((system_dials.shape[0]), dtype=np.int64))
         logits = self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
         loss = self.cross_entropy_loss(logits, zeros)
-        logits = self.forward(system_dials, system_lens)
-        loss += self.cross_entropy_loss(logits, ones)
+
         logs = {'train_loss': loss}
         return {'loss': loss, 'log': logs}
 
@@ -88,7 +101,6 @@ class VRNN(pl.LightningModule):
         user_dials, system_dials, user_lens, system_lens, dial_lens = val_batch
         logits = self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
         zeros = torch.from_numpy(np.zeros((self.config['batch_size']), dtype=np.int64))
-        print(logits.shape)
         loss = self.cross_entropy_loss(logits, zeros)
         return {'val_loss': loss}
 
@@ -112,7 +124,3 @@ class VRNN(pl.LightningModule):
 
     def test_dataloader(self):
         return [self._test_loader]
-
-    @staticmethod
-    def zero_hidden(sizes):
-        return torch.randn(*sizes)
