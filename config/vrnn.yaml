@@ -2,7 +2,7 @@
 data_type: 'raw'
 data_fn: 'VRNN/data/CamRest676.json'
 domain: 'camrest'
-embedding_fn: 'VRNN/data/embeddings/fasttext-fake.vec'
+embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
 # general settings
 batch_size: 16
 drop_prob: 0.7

@@ -91,7 +91,6 @@ class VRNN(pl.LightningModule):
 
     def training_step(self, train_batch, batch_idx):
         user_dials, system_dials, user_lens, system_lens, dial_lens = train_batch
-        zeros = torch.from_numpy(np.zeros((user_dials.shape[0]), dtype=np.int64))
         user_dials, user_outputs, user_lens, q_zs, p_zs =\
             self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
 
@@ -113,18 +112,32 @@ class VRNN(pl.LightningModule):
 
     def validation_step(self, val_batch, batch_idx):
         user_dials, system_dials, user_lens, system_lens, dial_lens = val_batch
-        logits = self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
-        zeros = torch.from_numpy(np.zeros((self.config['batch_size']), dtype=np.int64))
-        # loss = self.cross_entropy_loss(logits, zeros)
-        return {'val_loss': 0}
+        user_dials, user_outputs, user_lens, q_zs, p_zs = \
+            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
 
-    def validation_epoch_end(self, outputs):
+        total_decoder_ce_loss = 0
+        total_count = 0
+        for i, uo in enumerate(user_outputs):
+            ud_reference = user_dials[i].transpose(0, 1)[:uo.shape[0]]
+            batch_lens = user_lens[i, :uo.shape[1]]
+            output_serialized, lens, sorted_indices, unsorted_indices = \
+                pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
+            reference_serialized, lens, sorted_indices, unsorted_indices = \
+                pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
+            total_decoder_ce_loss += self.cross_entropy_loss(output_serialized, reference_serialized, reduction='sum')
+            total_count += reference_serialized.shape[0]
+
+        decoder_ce_loss = total_decoder_ce_loss / total_count
+        logs = {'val_loss': decoder_ce_loss}
+        return {'val_loss': decoder_ce_loss, 'log': logs}
+
+    def validation_end(self, outputs):
         # called at the end of the validation epoch
         # outputs is an array with what you returned in validation_step for each batch
         # outputs = [{'loss': batch_0_loss}, {'loss': batch_1_loss}, ..., {'loss': batch_n_loss}]
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
         tensorboard_logs = {'val_loss': avg_loss}
-        return {'avg_val_loss': avg_loss, 'log': tensorboard_logs}
+        return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

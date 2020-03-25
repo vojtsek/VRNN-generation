@@ -26,7 +26,9 @@ def main(flags):
     else:
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 
-    embeddings = Embeddings(config['embedding_fn'])
+    embeddings = Embeddings(config['embedding_fn'],
+                            # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
+                            extern_vocab=list(data_reader.all_words.keys()))
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
@@ -39,7 +41,7 @@ def main(flags):
     valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
     model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
-    trainer = pl.Trainer()
+    trainer = pl.Trainer(min_epochs=1)
     trainer.fit(model)
 
 

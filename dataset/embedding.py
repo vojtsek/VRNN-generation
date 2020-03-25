@@ -26,7 +26,7 @@ class Embeddings:
     UNK = '<UNK>'
     SPEC_TOKENS = [PAD, EOS, BOS, UNK]
 
-    def __init__(self, data_fn, out_fn=None, distance='cos'):
+    def __init__(self, data_fn, out_fn=None, distance='cos', extern_vocab=None):
         self.distance = distance
         self.id2w = {}
         self._w2id = {}
@@ -43,8 +43,11 @@ class Embeddings:
                 print('Reading {} vectors of dimension {}'.format(self.n, self.d))
                 for line in inf:
                     tokens = line.rstrip().split(' ')
+                    word = tokens[0].lower()
+                    if extern_vocab is not None and word not in extern_vocab:
+                        continue
                     self._data.append(list(map(float, tokens[1:])))
-                    self._w2id[tokens[0]] = len(self._w2id)
+                    self._w2id[word] = len(self._w2id)
                 for special_tk in Embeddings.SPEC_TOKENS:
                     self._data.append([random.gauss(0, 1) for _ in range(self.d)])
                     self._w2id[special_tk] = len(self._w2id)

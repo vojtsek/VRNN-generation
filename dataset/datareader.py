@@ -12,6 +12,7 @@ class DataReader:
         self._dialogues = []
         self.max_dial_len = 0
         self.max_turn_len = 0
+        self.all_words = Counter()
         if saved_dialogues is not None:
             with open(saved_dialogues, 'rb') as fd:
                 print('Loading data from "{}"'.format(saved_dialogues))
@@ -38,6 +39,9 @@ class DataReader:
     def _parse_data(self, data):
         for d in self.reader.parse_dialogues(data):
             self._dialogues.append(d)
+            for t in d.turns:
+                self.all_words.update(t.user)
+                self.all_words.update(t.system)
             self.max_dial_len = max(self.max_dial_len, len(d.turns))
             self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
         self.length = len(self._dialogues)
