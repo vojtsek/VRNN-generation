@@ -84,7 +84,7 @@ class VAECell(torch.nn.Module):
 
         # prior network
         z_prior_logits = self.prior_net(z_previous)
-        p_z = F.softmax(z_prior_logits)
+        p_z = F.softmax(z_prior_logits, dim=-1)
         log_p_z = torch.log(p_z)
 
         # decoder of user & system utterances

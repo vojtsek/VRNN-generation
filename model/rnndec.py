@@ -22,7 +22,7 @@ class RNNDecoder(torch.nn.Module):
 
         # pre_output = torch.cat([prev_embed, output], dim=2)
         projected_output = self.dropout_layer(output)
-        projected_output = self.output_projection(projected_output)
+        projected_output = F.log_softmax(self.output_projection(projected_output), dim=2)
 
         return output, hidden, projected_output
 
@@ -31,11 +31,9 @@ class RNNDecoder(torch.nn.Module):
 
         hidden = self.get_init_hidden(init_hidden)
 
-        # here we store all intermediate hidden states and pre-output vectors
         outputs = []
         projected_outputs = []
 
-        # unroll the decoder RNN for max_len steps
         for i in range(max_len):
             prev_embed = trg_embed[i, :].unsqueeze(0)
             output, hidden, projected_output = self.forward_step(prev_embed, hidden)

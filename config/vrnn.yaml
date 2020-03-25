@@ -4,7 +4,7 @@ data_fn: 'VRNN/data/CamRest676.json'
 domain: 'camrest'
 embedding_fn: 'VRNN/data/embeddings/fasttext-fake.vec'
 # general settings
-batch_size: 4
+batch_size: 16
 drop_prob: 0.7
 bidirectional_encoder: true
 gumbel_softmax_tmp: 0.8

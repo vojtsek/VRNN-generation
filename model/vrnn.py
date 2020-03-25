@@ -81,28 +81,42 @@ class VRNN(pl.LightningModule):
             torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
         user_dials, lens = pad_packed_sequence(PackedSequence(
             user_dials_data, batch_sizes, sorted_indices, unsorted_indices))
-        print(q_zs.shape, user_dials.shape)
+        user_lens, lens = pad_packed_sequence(PackedSequence(
+            user_lens_data, batch_sizes, sorted_indices, unsorted_indices))
 
-        return user_dials, q_zs, p_zs
+        return user_dials, user_outputs, user_lens, q_zs, p_zs
 
-    def cross_entropy_loss(self, logits, labels):
-        return F.nll_loss(logits, labels)
+    def cross_entropy_loss(self, logits, labels, reduction='mean'):
+        return F.nll_loss(logits, labels, reduction=reduction)
 
     def training_step(self, train_batch, batch_idx):
         user_dials, system_dials, user_lens, system_lens, dial_lens = train_batch
         zeros = torch.from_numpy(np.zeros((user_dials.shape[0]), dtype=np.int64))
-        logits = self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
-        loss = self.cross_entropy_loss(logits, zeros)
+        user_dials, user_outputs, user_lens, q_zs, p_zs =\
+            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
 
-        logs = {'train_loss': loss}
-        return {'loss': loss, 'log': logs}
+        total_decoder_ce_loss = 0
+        total_count = 0
+        for i, uo in enumerate(user_outputs):
+            ud_reference = user_dials[i].transpose(0, 1)[:uo.shape[0]]
+            batch_lens = user_lens[i, :uo.shape[1]]
+            output_serialized, lens, sorted_indices, unsorted_indices =\
+                pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
+            reference_serialized, lens, sorted_indices, unsorted_indices = \
+                pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
+            total_decoder_ce_loss += self.cross_entropy_loss(output_serialized, reference_serialized, reduction='sum')
+            total_count += reference_serialized.shape[0]
+
+        decoder_ce_loss = total_decoder_ce_loss / total_count
+        logs = {'train_loss': decoder_ce_loss}
+        return {'loss': decoder_ce_loss, 'log': logs}
 
     def validation_step(self, val_batch, batch_idx):
         user_dials, system_dials, user_lens, system_lens, dial_lens = val_batch
         logits = self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
         zeros = torch.from_numpy(np.zeros((self.config['batch_size']), dtype=np.int64))
-        loss = self.cross_entropy_loss(logits, zeros)
-        return {'val_loss': loss}
+        # loss = self.cross_entropy_loss(logits, zeros)
+        return {'val_loss': 0}
 
     def validation_epoch_end(self, outputs):
         # called at the end of the validation epoch
