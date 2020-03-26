@@ -48,7 +48,7 @@ class VAECell(torch.nn.Module):
     def forward(self,
                 user_dials, user_lens,
                 system_dials, system_lens,
-                vrnn_hidden, z_previous):
+                previous_vrnn_hidden, z_previous):
         # encode user & system utterances
         user_dials = self.embeddings(user_dials).transpose(1, 0)
         user_dials_packed = pack_padded_sequence(user_dials, user_lens, enforce_sorted=False)
@@ -73,7 +73,7 @@ class VAECell(torch.nn.Module):
         input_concatenated = torch.cat([last_user_hidden, last_system_hidden], dim=1)
 
         # posterior network
-        vrnn_hidden_cat_input = torch.cat([vrnn_hidden[0], input_concatenated], dim=1)
+        vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], input_concatenated], dim=1)
         z_posterior_logits = self.posterior_projection(self.posterior_net1(vrnn_hidden_cat_input))
         q_z = F.softmax(z_posterior_logits)
         log_q_z = torch.log(q_z + 1e-20)
@@ -86,10 +86,10 @@ class VAECell(torch.nn.Module):
         log_p_z = torch.log(p_z)
 
         # decoder of user & system utterances
-        decoder_init_hidden = torch.cat([vrnn_hidden[0], z_posterior_projection], dim=1)
+        decoder_init_hidden = torch.cat([previous_vrnn_hidden[0], z_posterior_projection], dim=1)
         outputs, hidden, decoded_user_outputs = self.user_dec(user_dials, decoder_init_hidden, torch.max(user_lens))
 
         vrnn_input = torch.cat([z_posterior_projection, input_concatenated], dim=1)
-        next_vrnn_hidden = self.vrnn_cell(vrnn_input, vrnn_hidden)
+        next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 
         return decoded_user_outputs, next_vrnn_hidden, q_z, p_z

@@ -59,6 +59,8 @@ class Embeddings:
         self.w2id = Embeddings.MyDefDict(self._w2id)
 
     def __getitem__(self, key):
+        if key not in self._w2id:
+            print(key)
         idx = self.w2id[key] if isinstance(key, str) else key
         return self._data[idx]
 
@@ -78,3 +80,8 @@ class Embeddings:
         else:
             cosf = np.dot(e1, e2) / (np.linalg.norm(e1, ord=2) * np.linalg.norm(e2, ord=2))
             return cosf
+
+    @property
+    def matrix(self, dtype='float32'):
+        data = np.stack(self._data)
+        return data.astype(dtype)

@@ -1,9 +1,23 @@
+import re
+
 import numpy as np
 import torch
 import torch.nn.functional as torch_fun
 
+
 def tokenize(utt):
-    return utt.split()
+    utt = utt.replace('\'s', ' is')
+    utt = utt.replace('\'d', ' would')
+    utt = utt.replace('\'m', ' am')
+    utt = utt.replace('aren\'t', 'are not')
+    utt = utt.replace('isn\'t', 'is not')
+    utt = re.sub(r'(\w)\.', r'\1 .', utt, flags=re.DOTALL)
+    utt = re.sub(r'(\w)\?', r'\1 ?', utt, flags=re.DOTALL)
+    utt = re.sub(r'(\w)!', r'\1 !', utt, flags=re.DOTALL)
+    utt = re.sub(r'(\w),', r'\1 ,', utt, flags=re.DOTALL)
+
+
+    return [tk.lower().strip('\'') for tk in utt.split()]
 
 
 def pad_turn(tokens, max_turn_len, pad):

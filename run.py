@@ -42,16 +42,17 @@ def main(flags):
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
     model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
     trainer = pl.Trainer(
-        min_epochs=1,
-        max_epochs=20
+        min_epochs=10,
+        max_epochs=100
     )
     trainer.fit(model)
     model.eval()
     loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
     for val_batch in loader:
-        all_predictions = model.predict(val_batch, embeddings.id2w)
-        for p in all_predictions:
+        all_predictions, all_gt = model.predict(val_batch, embeddings.id2w)
+        for p, gt in zip(all_predictions, all_gt):
             print(' '.join(p))
+            print(' '.join(gt))
 
 
 if __name__ == '__main__':

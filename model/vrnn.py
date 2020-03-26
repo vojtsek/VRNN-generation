@@ -32,6 +32,7 @@ class VRNN(pl.LightningModule):
             config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
+        self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
         self.vae_cell = VAECell(self.embeddings_matrix, self.vrnn_cell, self.config)
 
     def forward(self, user_dials, system_dials, user_lens, system_lens, dial_lens):
@@ -124,8 +125,8 @@ class VRNN(pl.LightningModule):
                 pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
             reference_serialized, lens, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
-            total_decoder_ce_loss += self.cross_entropy_loss(output_serialized, reference_serialized, reduction='sum')
-            total_count += reference_serialized.shape[0]
+            total_decoder_ce_loss += self.cross_entropy_loss(output_serialized, reference_serialized, reduction='mean')
+            total_count += 1
 
         decoder_ce_loss = total_decoder_ce_loss / total_count
         logs = {'val_loss': decoder_ce_loss}
@@ -146,11 +147,12 @@ class VRNN(pl.LightningModule):
 
         all_predictions, all_gt = [], []
         for i, uo in enumerate(user_outputs):
-            ud_reference = user_dials[i][:uo.shape[0], :uo.shape[1]]
+            ud_reference = user_dials[i].transpose(1, 0)[:uo.shape[0], :uo.shape[1]].numpy()
             batch_lens = user_lens[i, :uo.shape[1]]
             uo = torch.argmax(uo, dim=2).numpy()
             all_predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
-        return all_predictions
+            all_gt.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
+        return all_predictions, all_gt
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

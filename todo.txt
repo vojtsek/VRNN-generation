@@ -1,0 +1,8 @@
+ - normalization and tokenization properly
+ - other losses
+ - z predicting & visualization
+ - storing results properly
+ - model saving
+ - add comments!
+ - configurable z prior
+ - different z sampling techniques
