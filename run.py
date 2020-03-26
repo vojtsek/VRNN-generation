@@ -48,20 +48,28 @@ def main(flags):
     trainer.fit(model)
     model.eval()
     loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
-    for val_batch in loader:
-        all_predictions, all_gt = model.predict(val_batch, embeddings.id2w)
-        for p, gt in zip(all_predictions, all_gt):
-            print(' '.join(p))
-            print(' '.join(gt))
+    for d, val_batch in enumerate(loader):
+        all_user_predictions, all_user_gt, all_system_predictions, all_system_gt, all_z_samples =\
+            model.predict(val_batch, embeddings.id2w)
+        assert len(all_user_predictions) == len(all_system_predictions) == len(all_z_samples)
+        print(f'Dialogue {d+1}')
+        for i in range(len(all_user_predictions)):
+            print(f'\tTurn {i+1}')
+            print(f'\t{" ".join(all_user_predictions[i])}')
+            print(f'\t{" ".join(all_system_predictions[i])}')
+            print(f'\tORIG:')
+            print(f'\t{" ".join(all_user_gt[i])}')
+            print(f'\t{" ".join(all_system_gt[i])}')
+            print(f'\tZ: {all_z_samples[i]}')
+            print('-' * 80)
+        print('=' * 80)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-
     parser.add_argument('--output', type=str)
     parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=4)
-
     args = parser.parse_args()
 
     main(args)

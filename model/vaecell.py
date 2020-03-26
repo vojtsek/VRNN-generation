@@ -28,11 +28,13 @@ class VAECell(torch.nn.Module):
 
         self.user_dec = RNNDecoder(embeddings,
                                    config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+                                   # config['posterior_ff_sizes2'][-1],
                                    config['decoder_hidden_size'],
                                    config['teacher_forcing_prob'],
                                    config['drop_prob'])
         self.system_dec = RNNDecoder(embeddings,
                                      config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+                                     # config['posterior_ff_sizes2'][-1],
                                      config['decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
                                      config['drop_prob'])
@@ -87,9 +89,13 @@ class VAECell(torch.nn.Module):
 
         # decoder of user & system utterances
         decoder_init_hidden = torch.cat([previous_vrnn_hidden[0], z_posterior_projection], dim=1)
-        outputs, hidden, decoded_user_outputs = self.user_dec(user_dials, decoder_init_hidden, torch.max(user_lens))
+        # decoder_init_hidden = torch.cat([z_posterior_projection], dim=1)
+        outputs, hidden, decoded_user_outputs = self.user_dec(
+            user_dials, decoder_init_hidden, torch.max(user_lens))
+        outputs, hidden, decoded_system_outputs = self.system_dec(
+            system_dials, decoder_init_hidden, torch.max(system_lens))
 
         vrnn_input = torch.cat([z_posterior_projection, input_concatenated], dim=1)
         next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 
-        return decoded_user_outputs, next_vrnn_hidden, q_z, p_z
+        return decoded_user_outputs, decoded_system_outputs, next_vrnn_hidden, q_z, p_z, z_samples

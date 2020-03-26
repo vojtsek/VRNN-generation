@@ -61,10 +61,10 @@ class VRNN(pl.LightningModule):
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
         z_latent = initial_z
-        user_outputs = []
-        q_zs, p_zs = [], []
+        user_outputs, system_outputs = [], []
+        q_zs, p_zs, z_samples = [], [], []
         for bs in batch_sizes:
-            decoded_user_outputs, vrnn_hidden_state, q_z, p_z =\
+            decoded_user_outputs, decoded_system_outputs, vrnn_hidden_state, q_z, p_z, z_sample =\
                 self.vae_cell(user_dials_data[offset:offset+bs],
                               user_lens_data[offset:offset+bs],
                               system_dials_data[offset:offset+bs],
@@ -73,64 +73,65 @@ class VRNN(pl.LightningModule):
                               z_latent[:bs])
             offset += bs
             user_outputs.append(decoded_user_outputs)
+            system_outputs.append(decoded_system_outputs)
             q_zs.extend(q_z)
             p_zs.extend(p_z)
+            z_samples.extend(z_sample)
 
         q_zs, lens = pad_packed_sequence(PackedSequence(
             torch.stack(q_zs), batch_sizes, sorted_indices, unsorted_indices))
         p_zs, lens = pad_packed_sequence(PackedSequence(
             torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
+        z_samples, lens = pad_packed_sequence(PackedSequence(
+            torch.stack(z_samples), batch_sizes, sorted_indices, unsorted_indices))
+
         user_dials, lens = pad_packed_sequence(PackedSequence(
             user_dials_data, batch_sizes, sorted_indices, unsorted_indices))
         user_lens, lens = pad_packed_sequence(PackedSequence(
             user_lens_data, batch_sizes, sorted_indices, unsorted_indices))
+        system_dials, lens = pad_packed_sequence(PackedSequence(
+            system_dials_data, batch_sizes, sorted_indices, unsorted_indices))
+        system_lens, lens = pad_packed_sequence(PackedSequence(
+            system_lens_data, batch_sizes, sorted_indices, unsorted_indices))
 
-        return user_dials, user_outputs, user_lens, q_zs, p_zs
+        return user_dials, user_outputs, user_lens, system_dials, system_outputs, system_lens, q_zs, p_zs, z_samples
 
     def cross_entropy_loss(self, logits, labels, reduction='mean'):
         return F.nll_loss(logits, labels, reduction=reduction)
 
-    def training_step(self, train_batch, batch_idx):
-        user_dials, system_dials, user_lens, system_lens, dial_lens = train_batch
-        user_dials, user_outputs, user_lens, q_zs, p_zs =\
-            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
-
-        total_decoder_ce_loss = 0
+    def _compute_decoder_loss(self, outputs, reference, output_lens):
+        total_loss = 0
         total_count = 0
-        for i, uo in enumerate(user_outputs):
-            ud_reference = user_dials[i].transpose(0, 1)[:uo.shape[0]]
-            batch_lens = user_lens[i, :uo.shape[1]]
-            output_serialized, lens, sorted_indices, unsorted_indices =\
-                pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
-            reference_serialized, lens, sorted_indices, unsorted_indices = \
-                pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
-            total_decoder_ce_loss += self.cross_entropy_loss(output_serialized, reference_serialized, reduction='sum')
-            total_count += reference_serialized.shape[0]
-
-        decoder_ce_loss = total_decoder_ce_loss / total_count
-        logs = {'train_loss': decoder_ce_loss}
-        return {'loss': decoder_ce_loss, 'log': logs}
-
-    def validation_step(self, val_batch, batch_idx):
-        user_dials, system_dials, user_lens, system_lens, dial_lens = val_batch
-        user_dials, user_outputs, user_lens, q_zs, p_zs = \
-            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
-
-        total_decoder_ce_loss = 0
-        total_count = 0
-        for i, uo in enumerate(user_outputs):
-            ud_reference = user_dials[i].transpose(0, 1)[:uo.shape[0]]
-            batch_lens = user_lens[i, :uo.shape[1]]
+        for i, uo in enumerate(outputs):
+            ud_reference = reference[i].transpose(0, 1)[:uo.shape[0]]
+            batch_lens = output_lens[i, :uo.shape[1]]
             output_serialized, lens, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
             reference_serialized, lens, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
-            total_decoder_ce_loss += self.cross_entropy_loss(output_serialized, reference_serialized, reduction='mean')
-            total_count += 1
+            total_loss += self.cross_entropy_loss(output_serialized, reference_serialized,
+                                                  reduction='sum')
+            total_count += reference_serialized.shape[0]
+        return total_loss / total_count
 
-        decoder_ce_loss = total_decoder_ce_loss / total_count
-        logs = {'val_loss': decoder_ce_loss}
-        return {'val_loss': decoder_ce_loss, 'log': logs}
+    def _step(self, batch):
+        user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        user_dials, user_outputs, user_lens, system_dials, system_outputs, system_lens, q_zs, p_zs, z_samples =\
+            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
+        total_user_decoder_loss = self._compute_decoder_loss(user_outputs, user_dials, user_lens)
+        total_system_decoder_loss = self._compute_decoder_loss(system_outputs, system_dials, system_lens)
+        decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
+        return decoder_loss
+
+    def training_step(self, train_batch, batch_idx):
+        decoder_loss = self._step(train_batch)
+        logs = {'train_loss': decoder_loss}
+        return {'loss': decoder_loss, 'log': logs}
+
+    def validation_step(self, val_batch, batch_idx):
+        decoder_loss = self._step(val_batch)
+        logs = {'val_loss': decoder_loss}
+        return {'val_loss': decoder_loss, 'log': logs}
 
     def validation_end(self, outputs):
         # called at the end of the validation epoch
@@ -140,19 +141,25 @@ class VRNN(pl.LightningModule):
         tensorboard_logs = {'val_loss': avg_loss}
         return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
+    def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, ground_truths, inv_vocab):
+        for i, uo in enumerate(outputs):
+            ud_reference = reference_dials[i].transpose(1, 0)[:uo.shape[0], :uo.shape[1]].numpy()
+            uo = torch.argmax(uo, dim=2).numpy()
+            predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
+            ground_truths.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
+
     def predict(self, batch, inv_vocab):
         user_dials, system_dials, user_lens, system_lens, dial_lens = batch
-        user_dials, user_outputs, user_lens, q_zs, p_zs = \
+        user_dials, user_outputs, user_lens, system_dials, system_outputs, system_lens, q_zs, p_zs, z_samples = \
             self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
 
-        all_predictions, all_gt = [], []
-        for i, uo in enumerate(user_outputs):
-            ud_reference = user_dials[i].transpose(1, 0)[:uo.shape[0], :uo.shape[1]].numpy()
-            batch_lens = user_lens[i, :uo.shape[1]]
-            uo = torch.argmax(uo, dim=2).numpy()
-            all_predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
-            all_gt.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
-        return all_predictions, all_gt
+        all_user_predictions, all_user_gt = [], []
+        all_system_predictions, all_system_gt = [], []
+        self._post_process_forwarded_batch(user_outputs, user_dials, all_user_predictions, all_user_gt, inv_vocab)
+        self._post_process_forwarded_batch(system_outputs, system_dials, all_system_predictions, all_system_gt, inv_vocab)
+        all_samples = (torch.argmax(z_samples, dim=2).numpy())
+
+        return all_user_predictions, all_user_gt, all_system_predictions, all_system_gt, all_samples
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

@@ -11,6 +11,7 @@ def tokenize(utt):
     utt = utt.replace('\'m', ' am')
     utt = utt.replace('aren\'t', 'are not')
     utt = utt.replace('isn\'t', 'is not')
+    utt = utt.replace('don\'t', 'do not')
     utt = re.sub(r'(\w)\.', r'\1 .', utt, flags=re.DOTALL)
     utt = re.sub(r'(\w)\?', r'\1 ?', utt, flags=re.DOTALL)
     utt = re.sub(r'(\w)!', r'\1 !', utt, flags=re.DOTALL)
