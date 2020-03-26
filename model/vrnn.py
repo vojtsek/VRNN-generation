@@ -77,7 +77,8 @@ class VRNN(pl.LightningModule):
             system_outputs.append(decoded_system_outputs)
             q_zs.extend(q_z)
             p_zs.extend(p_z)
-            bow_logits_list.extend(bow_logits)
+            if self.config['with_bow_loss']:
+                bow_logits_list.extend(bow_logits)
             z_samples.extend(z_sample)
 
         q_zs, lens = pad_packed_sequence(PackedSequence(
@@ -86,8 +87,11 @@ class VRNN(pl.LightningModule):
             torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
         z_samples, lens = pad_packed_sequence(PackedSequence(
             torch.stack(z_samples), batch_sizes, sorted_indices, unsorted_indices))
-        bow_logits, lens = pad_packed_sequence(PackedSequence(
-            torch.stack(bow_logits_list), batch_sizes, sorted_indices, unsorted_indices))
+        if self.config['with_bow_loss']:
+            bow_logits, lens = pad_packed_sequence(PackedSequence(
+                torch.stack(bow_logits_list), batch_sizes, sorted_indices, unsorted_indices))
+        else:
+            bow_logits = None
 
         user_dials, lens = pad_packed_sequence(PackedSequence(
             user_dials_data, batch_sizes, sorted_indices, unsorted_indices))
@@ -186,7 +190,8 @@ class VRNN(pl.LightningModule):
 
     def predict(self, batch, inv_vocab):
         user_dials, system_dials, user_lens, system_lens, dial_lens = batch
-        user_dials, user_outputs, user_lens, system_dials, system_outputs, system_lens, q_zs, p_zs, z_samples = \
+        user_dials, user_outputs, user_lens, system_dials, system_outputs,\
+            system_lens, q_zs, p_zs, z_samples, bow_logits = \
             self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
 
         all_user_predictions, all_user_gt = [], []

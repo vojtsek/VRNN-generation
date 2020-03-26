@@ -1,5 +1,6 @@
 import argparse
 import json
+import os
 
 import yaml
 from torchvision.transforms import Compose as TorchCompose
@@ -26,6 +27,9 @@ def main(flags):
     else:
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 
+    if not os.path.isdir(args.output_dir):
+        os.makedirs(args.output_dir)
+
     embeddings = Embeddings(config['embedding_fn'],
                             out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=list(data_reader.all_words.keys()))
@@ -43,7 +47,7 @@ def main(flags):
     model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
     trainer = pl.Trainer(
         min_epochs=10,
-        max_epochs=100
+        max_epochs=10
     )
     trainer.fit(model)
     model.eval()
@@ -67,7 +71,7 @@ def main(flags):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--output', type=str)
+    parser.add_argument('--output_dir', type=str)
     parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--batch_size', type=int, default=4)
     args = parser.parse_args()

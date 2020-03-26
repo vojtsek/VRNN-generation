@@ -24,7 +24,9 @@ class VAECell(torch.nn.Module):
                                     config['posterior_ff_sizes1'],
                                     drop_prob=config['drop_prob'])
         self.posterior_projection = torch.nn.Linear(config['posterior_ff_sizes1'][-1], config['z_logits_dim'])
-        self.posterior_net2 = FFNet(config['z_logits_dim'], config['posterior_ff_sizes2'], config['drop_prob'])
+        self.posterior_net2 = FFNet(config['z_logits_dim'],
+                                    config['posterior_ff_sizes2'],
+                                    drop_prob=config['drop_prob'])
 
         self.user_dec = RNNDecoder(embeddings,
                                    # config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
@@ -48,7 +50,7 @@ class VAECell(torch.nn.Module):
         self.state_cell = torch.nn.LSTMCell(config['posterior_ff_sizes2'][-1] + config['input_encoder_hidden_size'],
                                             config['vrnn_hidden_size'])
 
-        self.prior_net = FFNet(config['z_logits_dim'], config['prior_ff_sizes'], config['drop_prob'])
+        self.prior_net = FFNet(config['z_logits_dim'], config['prior_ff_sizes'], drop_prob=config['drop_prob'])
         self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], config['z_logits_dim'])
 
     #     todo: activation f?

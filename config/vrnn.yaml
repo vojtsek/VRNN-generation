@@ -9,7 +9,7 @@ drop_prob: 0.5
 bidirectional_encoder: true
 gumbel_softmax_tmp: 0.8
 teacher_forcing_prob: 0.5
-with_bow_loss: true
+with_bow_loss: false
 # layer sizes
 input_encoder_hidden_size: 150
 decoder_hidden_size: 300

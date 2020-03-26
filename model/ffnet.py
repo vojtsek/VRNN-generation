@@ -8,7 +8,7 @@ class FFNet(torch.nn.Module):
         super(FFNet, self).__init__()
         in_size = input_size
         self.layers = []
-        self.activations = None
+        self.activations = activations
         for ls in layer_sizes:
             self.layers.append(torch.nn.Linear(in_size, ls))
             in_size = ls
