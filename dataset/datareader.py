@@ -38,6 +38,11 @@ class DataReader:
 
     def _parse_data(self, data):
         for d in self.reader.parse_dialogues(data):
+            if not len(d.turns) > 0:
+                continue
+            if any([t.user is None or t.system is None for t in d.turns]):
+                continue
+
             self._dialogues.append(d)
             for t in d.turns:
                 self.all_words.update(t.user)
@@ -186,29 +191,32 @@ class MultiWOZReader:
             i = 0
             for t in turns:
                 i += 1
-                if i % 2 == 0:
-                    continue
-                turn = Turn()
+
                 text = t['text'].strip().replace('\n', ' ')
-                turn.add_user(text)
-                turn.add_system('dummy')
-                if not 'dialog_act' in t:
-                    print('skipping')
+                if len(text) < 1:
                     continue
-                slu = self.parse_slu(t['dialog_act'])
-                if len(slu) == 0:
-                    continue
-                turn.add_usr_slu(slu)
-                print('SLUUU', [s.intent for s in slu])
-                intent_counter = Counter()
-                for slot in slu:
-                    intent_counter[slot.intent] += 1
-                if len(intent_counter) > 0:
-                    turn.add_intent(intent_counter.most_common(1)[0][0])
+                if i % 2 == 1:
+                    turn = Turn()
+                    turn.add_user(text)
                 else:
-                    turn.add_intent(None)
-                print(turn.user)
-                dialogue.add_turn(turn)
+                    turn.add_system(text)
+                    dialogue.add_turn(turn)
+                    continue
+
+                # if not 'dialog_act' in t:
+                #     continue
+                # slu = self.parse_slu(t['dialog_act'])
+                # if len(slu) == 0:
+                #     continue
+                # turn.add_usr_slu(slu)
+                # intent_counter = Counter()
+                # for slot in slu:
+                #     intent_counter[slot.intent] += 1
+                # if len(intent_counter) > 0:
+                #     turn.add_intent(intent_counter.most_common(1)[0][0])
+                # else:
+                #     turn.add_intent(None)
+
             yield dialogue
 
     def parse_slu(self, slu):

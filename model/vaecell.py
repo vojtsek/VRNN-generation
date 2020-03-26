@@ -29,19 +29,19 @@ class VAECell(torch.nn.Module):
                                     drop_prob=config['drop_prob'])
 
         self.user_dec = RNNDecoder(embeddings,
-                                   # config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
-                                   config['posterior_ff_sizes2'][-1],
+                                   config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+                                   # config['posterior_ff_sizes2'][-1],
                                    config['decoder_hidden_size'],
                                    config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
         self.system_dec = RNNDecoder(embeddings,
-                                     # config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
-                                     config['posterior_ff_sizes2'][-1],
+                                     config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+                                     # config['posterior_ff_sizes2'][-1],
                                      config['decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
                                      config['drop_prob'])
-        # self.bow_projection = FFNet(config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
-        self.bow_projection = FFNet(config['posterior_ff_sizes2'][-1],
+        self.bow_projection = FFNet(config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+        # self.bow_projection = FFNet(config['posterior_ff_sizes2'][-1],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[torch.tanh, torch.sigmoid],
                                     drop_prob=config['drop_prob']
@@ -96,8 +96,8 @@ class VAECell(torch.nn.Module):
         log_p_z = torch.log(p_z)
 
         # decoder of user & system utterances
-        # decoder_init_hidden = torch.cat([previous_vrnn_hidden[0], z_posterior_projection], dim=1)
-        decoder_init_hidden = torch.cat([z_posterior_projection], dim=1)
+        decoder_init_hidden = torch.cat([previous_vrnn_hidden[0], z_posterior_projection], dim=1)
+        # decoder_init_hidden = torch.cat([z_posterior_projection], dim=1)
         outputs, hidden, decoded_user_outputs = self.user_dec(
             user_dials, decoder_init_hidden, torch.max(user_lens))
         if self.config['with_bow_loss']:
