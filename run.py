@@ -27,12 +27,12 @@ def main(flags):
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 
     embeddings = Embeddings(config['embedding_fn'],
-                            # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
+                            out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=list(data_reader.all_words.keys()))
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
-                                                data_reader.max_turn_len),
+                                                data_reader.max_turn_len + 1),  # +1 for <EOS>
                                         ToTensor()])
     train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)
     valid_dataset = Dataset(data_reader.valid_set, transform=composed_transforms)
@@ -41,8 +41,17 @@ def main(flags):
     valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
     model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
-    trainer = pl.Trainer(min_epochs=1)
+    trainer = pl.Trainer(
+        min_epochs=1,
+        max_epochs=20
+    )
     trainer.fit(model)
+    model.eval()
+    loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
+    for val_batch in loader:
+        all_predictions = model.predict(val_batch, embeddings.id2w)
+        for p in all_predictions:
+            print(' '.join(p))
 
 
 if __name__ == '__main__':

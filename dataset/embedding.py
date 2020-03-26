@@ -43,14 +43,15 @@ class Embeddings:
                 print('Reading {} vectors of dimension {}'.format(self.n, self.d))
                 for line in inf:
                     tokens = line.rstrip().split(' ')
-                    word = tokens[0].lower()
-                    if extern_vocab is not None and word not in extern_vocab:
+                    word = tokens[0].lower().strip('.')
+                    if (extern_vocab is not None and word not in extern_vocab)\
+                            or (word in self._w2id):
                         continue
+                    self._w2id[word] = len(self._data)
                     self._data.append(list(map(float, tokens[1:])))
-                    self._w2id[word] = len(self._w2id)
                 for special_tk in Embeddings.SPEC_TOKENS:
+                    self._w2id[special_tk] = len(self._data)
                     self._data.append([random.gauss(0, 1) for _ in range(self.d)])
-                    self._w2id[special_tk] = len(self._w2id)
             if out_fn is not None:
                 with open(out_fn, 'wb') as of:
                     pickle.dump((self._data, self._w2id), of)

@@ -26,17 +26,15 @@ class VAECell(torch.nn.Module):
         self.posterior_projection = torch.nn.Linear(config['posterior_ff_sizes1'][-1], config['z_logits_dim'])
         self.posterior_net2 = FFNet(config['z_logits_dim'], config['posterior_ff_sizes2'], config['drop_prob'])
 
-        self.user_dec = RNNDecoder(embedding_dim,
+        self.user_dec = RNNDecoder(embeddings,
                                    config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
                                    config['decoder_hidden_size'],
-                                   config['input_encoder_hidden_size'] * (1 + int(config['bidirectional_encoder'])),
-                                   embeddings.num_embeddings,
+                                   config['teacher_forcing_prob'],
                                    config['drop_prob'])
-        self.system_dec = RNNDecoder(embedding_dim,
+        self.system_dec = RNNDecoder(embeddings,
                                      config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
                                      config['decoder_hidden_size'],
-                                     config['input_encoder_hidden_size'] * (1 + int(config['bidirectional_encoder'])),
-                                     embeddings.num_embeddings,
+                                     config['teacher_forcing_prob'],
                                      config['drop_prob'])
 
         self.state_cell = torch.nn.LSTMCell(config['posterior_ff_sizes2'][-1] + config['input_encoder_hidden_size'],

@@ -8,6 +8,7 @@ batch_size: 16
 drop_prob: 0.7
 bidirectional_encoder: true
 gumbel_softmax_tmp: 0.8
+teacher_forcing_prob: 0.7
 # layer sizes
 input_encoder_hidden_size: 100
 utterance_decoder_hidden_size: 100

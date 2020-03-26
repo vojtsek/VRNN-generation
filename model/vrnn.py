@@ -139,6 +139,19 @@ class VRNN(pl.LightningModule):
         tensorboard_logs = {'val_loss': avg_loss}
         return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
+    def predict(self, batch, inv_vocab):
+        user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        user_dials, user_outputs, user_lens, q_zs, p_zs = \
+            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
+
+        all_predictions, all_gt = [], []
+        for i, uo in enumerate(user_outputs):
+            ud_reference = user_dials[i][:uo.shape[0], :uo.shape[1]]
+            batch_lens = user_lens[i, :uo.shape[1]]
+            uo = torch.argmax(uo, dim=2).numpy()
+            all_predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
+        return all_predictions
+
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
         return optimizer

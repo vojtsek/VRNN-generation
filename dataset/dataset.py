@@ -31,8 +31,8 @@ class WordToInt(object):
 
     def __call__(self, sample):
         for t in sample.turns:
-            t.user = [self.embeddings.w2id[tk] for tk in t.user]
-            t.system = [self.embeddings.w2id[tk] for tk in t.system]
+            t.user = [self.embeddings.w2id[tk] for tk in t.user + [Embeddings.EOS]]
+            t.system = [self.embeddings.w2id[tk] for tk in t.system + [Embeddings.EOS]]
         return sample
 
 
