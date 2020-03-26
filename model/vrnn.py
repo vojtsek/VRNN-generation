@@ -63,8 +63,9 @@ class VRNN(pl.LightningModule):
         z_latent = initial_z
         user_outputs, system_outputs = [], []
         q_zs, p_zs, z_samples = [], [], []
+        bow_logits_list = []
         for bs in batch_sizes:
-            decoded_user_outputs, decoded_system_outputs, vrnn_hidden_state, q_z, p_z, z_sample =\
+            decoded_user_outputs, decoded_system_outputs, vrnn_hidden_state, q_z, p_z, z_sample, bow_logits =\
                 self.vae_cell(user_dials_data[offset:offset+bs],
                               user_lens_data[offset:offset+bs],
                               system_dials_data[offset:offset+bs],
@@ -76,6 +77,7 @@ class VRNN(pl.LightningModule):
             system_outputs.append(decoded_system_outputs)
             q_zs.extend(q_z)
             p_zs.extend(p_z)
+            bow_logits_list.extend(bow_logits)
             z_samples.extend(z_sample)
 
         q_zs, lens = pad_packed_sequence(PackedSequence(
@@ -84,6 +86,8 @@ class VRNN(pl.LightningModule):
             torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
         z_samples, lens = pad_packed_sequence(PackedSequence(
             torch.stack(z_samples), batch_sizes, sorted_indices, unsorted_indices))
+        bow_logits, lens = pad_packed_sequence(PackedSequence(
+            torch.stack(bow_logits_list), batch_sizes, sorted_indices, unsorted_indices))
 
         user_dials, lens = pad_packed_sequence(PackedSequence(
             user_dials_data, batch_sizes, sorted_indices, unsorted_indices))
@@ -94,7 +98,8 @@ class VRNN(pl.LightningModule):
         system_lens, lens = pad_packed_sequence(PackedSequence(
             system_lens_data, batch_sizes, sorted_indices, unsorted_indices))
 
-        return user_dials, user_outputs, user_lens, system_dials, system_outputs, system_lens, q_zs, p_zs, z_samples
+        return user_dials, user_outputs, user_lens, system_dials, system_outputs,\
+               system_lens, q_zs, p_zs, z_samples, bow_logits
 
     def cross_entropy_loss(self, logits, labels, reduction='mean'):
         return F.nll_loss(logits, labels, reduction=reduction)
@@ -114,24 +119,55 @@ class VRNN(pl.LightningModule):
             total_count += reference_serialized.shape[0]
         return total_loss / total_count
 
+    def _compute_bow_loss(self, bow_logits, outputs, reference, output_lens):
+        # todo: more effective
+        total_loss = 0
+        total_count = 0
+        # go through decoded sequence step by step
+        # (i.e. we know how long is the decoded sequence in terms of number of turns)
+        for i, uo in enumerate(outputs):
+            ud_reference = reference[i].transpose(0, 1)[:uo.shape[0]]
+            batch_lens = output_lens[i, :uo.shape[1]]
+            # serialize references at turn i w.r.t respective turn lens across batch
+            reference_serialized, lens, sorted_indices, unsorted_indices = \
+                pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
+
+            off = 0
+            # go through each turn in batch
+            for k, l in enumerate(batch_lens):
+                bow_turn_token_vector = torch.zeros((bow_logits.shape[-1]))
+                turn_tokens_reference = reference_serialized[off:off+l]
+                turn_predicted_bow = bow_logits[i, k]  # predicted BOW at turn i for k-th dialogue in batch
+                bow_turn_token_vector[turn_tokens_reference] = 1  # create BOW vector using ground truth tokens
+                total_loss += F.mse_loss(bow_turn_token_vector, turn_predicted_bow, reduction='sum')
+                off += l
+                total_count += l
+        return total_loss / total_count
+
     def _step(self, batch):
         user_dials, system_dials, user_lens, system_lens, dial_lens = batch
-        user_dials, user_outputs, user_lens, system_dials, system_outputs, system_lens, q_zs, p_zs, z_samples =\
+        user_dials, user_outputs, user_lens, system_dials, system_outputs,\
+            system_lens, q_zs, p_zs, z_samples, bow_logits =\
             self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
         total_user_decoder_loss = self._compute_decoder_loss(user_outputs, user_dials, user_lens)
         total_system_decoder_loss = self._compute_decoder_loss(system_outputs, system_dials, system_lens)
+        if self.config['with_bow_loss']:
+            total_bow_loss = self._compute_bow_loss(bow_logits, user_outputs, user_dials, user_lens)
+        else:
+            total_bow_loss = 0
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
-        return decoder_loss
+        loss = decoder_loss + total_bow_loss
+        return loss
 
     def training_step(self, train_batch, batch_idx):
-        decoder_loss = self._step(train_batch)
-        logs = {'train_loss': decoder_loss}
-        return {'loss': decoder_loss, 'log': logs}
+        loss = self._step(train_batch)
+        logs = {'train_loss': loss}
+        return {'loss': loss, 'log': logs}
 
     def validation_step(self, val_batch, batch_idx):
-        decoder_loss = self._step(val_batch)
-        logs = {'val_loss': decoder_loss}
-        return {'val_loss': decoder_loss, 'log': logs}
+        loss = self._step(val_batch)
+        logs = {'val_loss': loss}
+        return {'val_loss': loss, 'log': logs}
 
     def validation_end(self, outputs):
         # called at the end of the validation epoch

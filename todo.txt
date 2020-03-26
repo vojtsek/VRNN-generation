@@ -1,8 +1,9 @@
  - normalization and tokenization properly
- - other losses
+ - other losses - BOW, KL
  - z predicting & visualization
  - storing results properly
  - model saving
  - add comments!
  - configurable z prior
  - different z sampling techniques
+ - system decoder conditioned on user dec
