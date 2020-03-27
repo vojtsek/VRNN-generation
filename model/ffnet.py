@@ -1,5 +1,4 @@
 import torch
-import torch.nn.functional as F
 
 
 class FFNet(torch.nn.Module):

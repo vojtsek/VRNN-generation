@@ -15,7 +15,7 @@ class VAECell(torch.nn.Module):
         self.embeddings = embeddings
         embedding_dim = embeddings.embedding_dim
         self.vrnn_cell = vrnn_cell
-        self.weights = torch.rand((1, config['number_z_vectors']))
+        self.aggregation_layer = torch.nn.Conv1d(in_channels=config['number_z_vectors'], out_channels=1, kernel_size=1)
         self.embedding_encoder = torch.nn.LSTM(embedding_dim,
                                                config['input_encoder_hidden_size'],
                                                bidirectional=config['bidirectional_encoder'])
@@ -81,7 +81,7 @@ class VAECell(torch.nn.Module):
         z_projection_lst, q_z_lst, z_samples_lst = zip(*[z_net(vrnn_hidden_cat_input) for z_net in self.z_nets])
 
         # todo: weighted sum
-        z_posterior_projection = self.weighted_sum(torch.stack(z_projection_lst))
+        z_posterior_projection = self.aggregation_layer(torch.stack(z_projection_lst))
         q_z = self.weighted_sum(torch.stack(q_z_lst))
         z_samples = self.weighted_sum(torch.stack(z_samples_lst))
 

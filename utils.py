@@ -55,3 +55,9 @@ def gumbel_softmax_sample(logits, temperature):
     """ Draw a sample from the Gumbel-Softmax distribution"""
     y = logits + sample_gumbel(logits.shape)
     return torch_fun.softmax(y / temperature, dim=-1), y / temperature
+
+
+def normal_sample(mu, logvar):
+    std = torch.exp(0.5 * logvar)
+    eps = torch.randn_like(std)
+    return eps * std + mu

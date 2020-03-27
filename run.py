@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 import os
+import shutil
 
 import yaml
 from torchvision.transforms import Compose as TorchCompose
@@ -34,6 +35,7 @@ def main(flags):
     output_dir = os.path.join(args.output_dir, f'run_{int(time.time())}')
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
+    shutil.copy(flags.config, os.path.join(output_dir, 'conf.yaml'))
 
     embeddings = Embeddings(config['embedding_fn'],
                             out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
@@ -53,7 +55,7 @@ def main(flags):
     callbacks = [EpochEndCb()]
     trainer = pl.Trainer(
         min_epochs=10,
-        max_epochs=100,
+        max_epochs=50,
         callbacks=callbacks,
         show_progress_bar=True,
         progress_bar_refresh_rate=1
