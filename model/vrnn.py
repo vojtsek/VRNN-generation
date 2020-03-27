@@ -34,6 +34,10 @@ class VRNN(pl.LightningModule):
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
         self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
         self.vae_cell = VAECell(self.embeddings_matrix, self.vrnn_cell, self.config)
+        self.epoch_number = 0
+        self.k = config['k_loss_coeff']
+        self.alpha = config['alpha_coeff_step']
+        self.lmbd = config['default_lambda_loss']
 
     def forward(self, user_dials, system_dials, user_lens, system_lens, dial_lens):
         batch_sort_perm = reversed(np.argsort(dial_lens))
@@ -143,6 +147,7 @@ class VRNN(pl.LightningModule):
                 turn_tokens_reference = reference_serialized[off:off+l]
                 turn_predicted_bow = bow_logits[i, k]  # predicted BOW at turn i for k-th dialogue in batch
                 bow_turn_token_vector[turn_tokens_reference] = 1  # create BOW vector using ground truth tokens
+                # print(torch.sum(bow_turn_token_vector), torch.sum(turn_predicted_bow))
                 total_loss += F.mse_loss(bow_turn_token_vector, turn_predicted_bow, reduction='sum')
                 off += l
                 total_count += l
@@ -160,7 +165,8 @@ class VRNN(pl.LightningModule):
         else:
             total_bow_loss = 0
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
-        loss = decoder_loss + total_bow_loss
+        lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
+        loss = decoder_loss + lambda_i * total_bow_loss
         return loss
 
     def training_step(self, train_batch, batch_idx):
@@ -214,3 +220,9 @@ class VRNN(pl.LightningModule):
 
     def test_dataloader(self):
         return [self._test_loader]
+
+
+class EpochEndCb(pl.Callback):
+
+    def on_epoch_end(self, trainer, model):
+        model.epoch_number += 1

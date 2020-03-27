@@ -43,7 +43,8 @@ class VAECell(torch.nn.Module):
         self.bow_projection = FFNet(config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
         # self.bow_projection = FFNet(config['posterior_ff_sizes2'][-1],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
-                                    activations=[torch.tanh, torch.sigmoid],
+                                    activations=[None, torch.relu],
+                                    # activations=None,
                                     drop_prob=config['drop_prob']
                                     )
 

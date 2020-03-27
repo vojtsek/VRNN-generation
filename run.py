@@ -11,7 +11,7 @@ import pytorch_lightning as pl
 from .dataset.datareader import DataReader, CamRestReader, MultiWOZReader
 from .dataset.dataset import Dataset, ToTensor, Padding, WordToInt
 from .dataset.embedding import Embeddings
-from .model.vrnn import VRNN
+from .model.vrnn import VRNN, EpochEndCb
 
 
 def main(flags):
@@ -50,9 +50,11 @@ def main(flags):
     valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
     model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
+    callbacks = [EpochEndCb()]
     trainer = pl.Trainer(
         min_epochs=10,
-        max_epochs=100
+        max_epochs=100,
+        callbacks=callbacks
     )
     trainer.fit(model)
     model.eval()
