@@ -1,9 +1,10 @@
 import torch
 import torch.nn.functional as F
-from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from torch.nn.utils.rnn import pack_padded_sequence
 
 from . import FFNet, RNNDecoder
-from ..utils import zero_hidden, gumbel_softmax_sample
+from .z_net import ZNet
+from ..utils import zero_hidden
 
 
 class VAECell(torch.nn.Module):
@@ -14,20 +15,12 @@ class VAECell(torch.nn.Module):
         self.embeddings = embeddings
         embedding_dim = embeddings.embedding_dim
         self.vrnn_cell = vrnn_cell
+        self.weights = torch.rand((1, config['number_z_vectors']))
         self.embedding_encoder = torch.nn.LSTM(embedding_dim,
                                                config['input_encoder_hidden_size'],
                                                bidirectional=config['bidirectional_encoder'])
 
-        self.posterior_net1 = FFNet(config['input_encoder_hidden_size'] *
-                                    2 * (1 + int(config['bidirectional_encoder'])) +
-                                    config['vrnn_hidden_size'],
-                                    config['posterior_ff_sizes1'],
-                                    drop_prob=config['drop_prob'])
-        self.posterior_projection = torch.nn.Linear(config['posterior_ff_sizes1'][-1], config['z_logits_dim'])
-        self.posterior_net2 = FFNet(config['z_logits_dim'],
-                                    config['posterior_ff_sizes2'],
-                                    drop_prob=config['drop_prob'])
-
+        self.z_nets = torch.nn.ModuleList([ZNet(config) for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
                                    config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
                                    # config['posterior_ff_sizes2'][-1],
@@ -85,11 +78,13 @@ class VAECell(torch.nn.Module):
 
         # posterior network
         vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], input_concatenated], dim=1)
-        z_posterior_logits = self.posterior_projection(self.posterior_net1(vrnn_hidden_cat_input))
-        q_z = F.softmax(z_posterior_logits)
-        log_q_z = torch.log(q_z + 1e-20)
-        z_samples, z_samples_logits = gumbel_softmax_sample(z_posterior_logits, self.config['gumbel_softmax_tmp'])
-        z_posterior_projection = self.posterior_net2(z_samples)
+        z_projection_lst, q_z_lst, z_samples_lst = zip(*[z_net(vrnn_hidden_cat_input) for z_net in self.z_nets])
+
+        # todo: weighted sum
+        z_posterior_projection = self.weighted_sum(torch.stack(z_projection_lst))
+        q_z = self.weighted_sum(torch.stack(q_z_lst))
+        z_samples = self.weighted_sum(torch.stack(z_samples_lst))
+
 
         # prior network
         z_prior_logits = self.prior_net(z_previous)
@@ -112,3 +107,8 @@ class VAECell(torch.nn.Module):
         next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 
         return decoded_user_outputs, decoded_system_outputs, next_vrnn_hidden, q_z, p_z, z_samples, bow_logits
+
+    def weighted_sum(self, x):
+        x = x.transpose(1, 0)
+        summed = torch.matmul(self.weights, x)
+        return summed.squeeze(1)

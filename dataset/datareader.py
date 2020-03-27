@@ -3,7 +3,7 @@ from collections import Counter
 
 import numpy
 
-from utils import tokenize
+from ..utils import tokenize
 
 
 class DataReader:

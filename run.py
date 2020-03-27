@@ -54,8 +54,11 @@ def main(flags):
     trainer = pl.Trainer(
         min_epochs=10,
         max_epochs=100,
-        callbacks=callbacks
+        callbacks=callbacks,
+        show_progress_bar=True,
+        progress_bar_refresh_rate=1
     )
+    print(model)
     trainer.fit(model)
     model.eval()
     loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
