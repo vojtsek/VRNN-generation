@@ -153,6 +153,16 @@ class VRNN(pl.LightningModule):
                 total_count += l
         return total_loss / total_count
 
+    def _compute_cvae_kl_loss(self, q_zs):
+        total_kl_loss = 0
+        count = 0
+        for q_z in q_zs:
+            mu = q_z[:, :int(q_z.shape[1] / 2)]
+            logvar = q_z[:, int(q_z.shape[1] / 2):]
+            total_kl_loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=1), dim=0)
+            count += 1
+        return total_kl_loss / count
+
     def _step(self, batch):
         user_dials, system_dials, user_lens, system_lens, dial_lens = batch
         user_dials, user_outputs, user_lens, system_dials, system_outputs,\
@@ -164,9 +174,16 @@ class VRNN(pl.LightningModule):
             total_bow_loss = self._compute_bow_loss(bow_logits, user_outputs, user_dials, user_lens)
         else:
             total_bow_loss = 0
+
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
+        if self.config['z_type'] == 'cont':
+            kl_loss = self._compute_cvae_kl_loss(q_zs)
+        else:
+            # todo DVRNN prior regularization
+            kl_loss = 0
+
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
-        loss = decoder_loss + lambda_i * total_bow_loss
+        loss = decoder_loss + lambda_i * total_bow_loss + kl_loss
         return loss
 
     def training_step(self, train_batch, batch_idx):

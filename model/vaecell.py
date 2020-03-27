@@ -81,10 +81,9 @@ class VAECell(torch.nn.Module):
         z_projection_lst, q_z_lst, z_samples_lst = zip(*[z_net(vrnn_hidden_cat_input) for z_net in self.z_nets])
 
         # todo: weighted sum
-        z_posterior_projection = self.aggregation_layer(torch.stack(z_projection_lst))
+        z_posterior_projection = self.weighted_sum(torch.stack(z_projection_lst))
         q_z = self.weighted_sum(torch.stack(q_z_lst))
         z_samples = self.weighted_sum(torch.stack(z_samples_lst))
-
 
         # prior network
         z_prior_logits = self.prior_net(z_previous)
@@ -109,6 +108,11 @@ class VAECell(torch.nn.Module):
         return decoded_user_outputs, decoded_system_outputs, next_vrnn_hidden, q_z, p_z, z_samples, bow_logits
 
     def weighted_sum(self, x):
+        if x.shape[0] == 1:
+            return x.squeeze(0)
         x = x.transpose(1, 0)
-        summed = torch.matmul(self.weights, x)
-        return summed.squeeze(1)
+        x = self.aggregation_layer(x)
+        return x.squeeze(1)
+        # x = x.transpose(1, 0)
+        # summed = torch.matmul(self.weights, x)
+        # return summed.squeeze(1)

@@ -33,7 +33,7 @@ class ZNet(torch.nn.Module):
         else:
             mu = z_posterior_logits[:, :self.config['z_logits_dim']]
             logvar = z_posterior_logits[:, self.config['z_logits_dim']:]
-            q_z = torch.sigmoid(z_posterior_logits)
+            q_z = z_posterior_logits
             z_samples = normal_sample(mu, logvar)
         z_posterior_projection = self.posterior_net2(z_samples)
         return z_posterior_projection, q_z, z_samples

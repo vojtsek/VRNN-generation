@@ -30,5 +30,5 @@ posterior_ff_sizes2:
 prior_ff_sizes:
   - 100
   - 100
-z_logits_dim: 15
+z_logits_dim: 100
 bow_layer_size: 400
