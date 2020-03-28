@@ -63,6 +63,7 @@ class Embeddings:
     def add_tokens(self, tokens):
         for tk in tokens:
             self._w2id[tk] = len(self._data)
+            self.id2w[len(self._data)] = tk
             self._data.append([random.gauss(0, 1) for _ in range(self.d)])
 
     def embed_tokens(self, tokens, token_weights=None):

@@ -42,6 +42,6 @@ class Delexicalizer:
         return utt
 
     def _make_tag(self, s):
-        tag = f'<{s.upper()}>'
+        tag = f'<{s.lower()}>'
         self.all_tags.add(tag)
         return tag

@@ -243,3 +243,14 @@ class EpochEndCb(pl.Callback):
 
     def on_epoch_end(self, trainer, model):
         model.epoch_number += 1
+
+
+def checkpoint_callback(filepath):
+    return pl.callbacks.ModelCheckpoint(
+        filepath=filepath,
+        save_top_k=1,
+        verbose=True,
+        monitor='val_loss',
+        mode='min',
+        prefix=''
+    )

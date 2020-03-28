@@ -12,7 +12,7 @@ import pytorch_lightning as pl
 from .dataset import DataReader, CamRestReader, MultiWOZReader,\
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 
-from .model.vrnn import VRNN, EpochEndCb
+from .model.vrnn import VRNN, EpochEndCb, checkpoint_callback
 
 
 def main(flags):
@@ -54,17 +54,22 @@ def main(flags):
     train_loader = TorchDataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
     valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
-    model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
-    callbacks = [EpochEndCb()]
-    trainer = pl.Trainer(
-        min_epochs=10,
-        max_epochs=50,
-        callbacks=callbacks,
-        show_progress_bar=True,
-        progress_bar_refresh_rate=1
-    )
-    print(model)
-    trainer.fit(model)
+
+    if flags.model_path is not None:
+        model = VRNN.load_from_checkpoint(flags.model_path)
+    else:
+        model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
+        callbacks = [EpochEndCb()]
+        trainer = pl.Trainer(
+            min_epochs=10,
+            max_epochs=50,
+            callbacks=callbacks,
+            show_progress_bar=True,
+            checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
+            progress_bar_refresh_rate=1
+        )
+        trainer.fit(model)
+
     model.eval()
     loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, 'output_all.txt'), 'wt') as all_fd, \
@@ -109,7 +114,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_dir', type=str)
     parser.add_argument('--config', type=str, required=True)
-    parser.add_argument('--batch_size', type=int, default=4)
+    parser.add_argument('--model_path', type=str)
     args = parser.parse_args()
 
     main(args)
