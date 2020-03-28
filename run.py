@@ -9,23 +9,25 @@ from torchvision.transforms import Compose as TorchCompose
 from torch.utils.data import DataLoader as TorchDataLoader
 import pytorch_lightning as pl
 
-from .dataset.datareader import DataReader, CamRestReader, MultiWOZReader
-from .dataset.dataset import Dataset, ToTensor, Padding, WordToInt
-from .dataset.embedding import Embeddings
+from .dataset import DataReader, CamRestReader, MultiWOZReader,\
+    Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
+
 from .model.vrnn import VRNN, EpochEndCb
 
 
 def main(flags):
     with open(flags.config, 'rt') as in_fd:
         config = yaml.load(in_fd, Loader=yaml.FullLoader)
+
+    delexicalizer = Delexicalizer(config['data_dir'])
     if config['data_type'] == 'raw':
-        with open(config['data_fn'], 'rt') as in_fd:
+        with open(os.path.join(config['data_dir'], 'data.json'), 'rt') as in_fd:
             data = json.load(in_fd)
         if config['domain'] == 'camrest':
             reader = CamRestReader()
         elif config['domain'] == 'woz-hotel':
             reader = MultiWOZReader(['hotel'])
-        data_reader = DataReader(data=data, reader=reader)
+        data_reader = DataReader(data=data, reader=reader, delexicalizer=delexicalizer)
     else:
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 
@@ -38,8 +40,9 @@ def main(flags):
     shutil.copy(flags.config, os.path.join(output_dir, 'conf.yaml'))
 
     embeddings = Embeddings(config['embedding_fn'],
-                            out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
+                            # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=list(data_reader.all_words.keys()))
+    embeddings.add_tokens(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,

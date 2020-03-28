@@ -5,13 +5,13 @@ import numpy
 
 from ..utils import tokenize
 
-
 class DataReader:
 
-    def __init__(self, data=None, reader=None, saved_dialogues=None, train=.8, valid=.1):
+    def __init__(self, data=None, reader=None, saved_dialogues=None, delexicalizer=None, train=.8, valid=.1):
         self._dialogues = []
         self.max_dial_len = 0
         self.max_turn_len = 0
+        self.delexicalizer = delexicalizer
         self.all_words = Counter()
         if saved_dialogues is not None:
             with open(saved_dialogues, 'rb') as fd:
@@ -37,7 +37,7 @@ class DataReader:
         return dials
 
     def _parse_data(self, data):
-        for d in self.reader.parse_dialogues(data):
+        for d in self.reader.parse_dialogues(data, self.delexicalizer):
             if not len(d.turns) > 0:
                 continue
             if any([t.user is None or t.system is None for t in d.turns]):
@@ -121,10 +121,13 @@ class Turn:
         self.parse = None
         self.intent = None
     
-    def add_user(self, utt):
+    def add_user(self, utt, delexicalizer=None):
+        if delexicalizer is not None:
+            utt = delexicalizer.delex_utterance(utt)
         self.user = tokenize(utt)
 
-    def add_system(self, utt):
+    def add_system(self, utt, delexicalizer=None):
+        utt = delexicalizer.delex_utterance(utt)
         self.system = tokenize(utt)
 
     def add_usr_slu(self, usr_slu):
@@ -150,14 +153,14 @@ class CamRestReader:
     def __init__(self):
         pass
 
-    def parse_dialogues(self, data):
+    def parse_dialogues(self, data, delexicalizer=None):
         for dial in data:
             dialogue = Dialogue()
             turns = dial['dial']
             for t in turns:
                 turn = Turn()
-                turn.add_user(t['usr']['transcript'])
-                turn.add_system(t['sys']['sent'])
+                turn.add_user(t['usr']['transcript'], delexicalizer)
+                turn.add_system(t['sys']['sent'], delexicalizer)
                 slu = self.parse_slu(t['usr']['slu'])
                 turn.add_usr_slu(slu)
                 intent_counter = Counter()
@@ -184,7 +187,7 @@ class MultiWOZReader:
     def __init__(self, allowed_domains):
         self.allowed_domains = allowed_domains
 
-    def parse_dialogues(self, data):
+    def parse_dialogues(self, data, delexicalizer=None):
         for dial in data.values():
             dialogue = Dialogue()
             turns = dial['log']
@@ -197,9 +200,9 @@ class MultiWOZReader:
                     continue
                 if i % 2 == 1:
                     turn = Turn()
-                    turn.add_user(text)
+                    turn.add_user(text, delexicalizer)
                 else:
-                    turn.add_system(text)
+                    turn.add_system(text, delexicalizer)
                     dialogue.add_turn(turn)
                     continue
 

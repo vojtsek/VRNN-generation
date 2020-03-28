@@ -49,9 +49,7 @@ class Embeddings:
                         continue
                     self._w2id[word] = len(self._data)
                     self._data.append(list(map(float, tokens[1:])))
-                for special_tk in Embeddings.SPEC_TOKENS:
-                    self._w2id[special_tk] = len(self._data)
-                    self._data.append([random.gauss(0, 1) for _ in range(self.d)])
+                self.add_tokens(Embeddings.SPEC_TOKENS)
             if out_fn is not None:
                 with open(out_fn, 'wb') as of:
                     pickle.dump((self._data, self._w2id), of)
@@ -59,10 +57,13 @@ class Embeddings:
         self.w2id = Embeddings.MyDefDict(self._w2id)
 
     def __getitem__(self, key):
-        if key not in self._w2id:
-            print(key)
         idx = self.w2id[key] if isinstance(key, str) else key
         return self._data[idx]
+
+    def add_tokens(self, tokens):
+        for tk in tokens:
+            self._w2id[tk] = len(self._data)
+            self._data.append([random.gauss(0, 1) for _ in range(self.d)])
 
     def embed_tokens(self, tokens, token_weights=None):
         if token_weights is None:

@@ -1,8 +1,8 @@
 # data settings
 data_type: 'raw'
-data_fn: 'VRNN/data/CamRest676.json'
+data_dir: 'VRNN/data/camrest'
 domain: 'camrest'
-#data_fn: 'VRNN/data/woz-data.json'
+#data_fn: 'VRNN/data/data.json'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
 # general settings
@@ -23,12 +23,12 @@ decoder_hidden_size: 300
 vrnn_hidden_size: 200
 posterior_ff_sizes1:
   - 400
-  - 200
+#  - 200
 posterior_ff_sizes2:
-  - 200
+#  - 200
   - 200
 prior_ff_sizes:
   - 100
   - 100
-z_logits_dim: 100
+z_logits_dim: 200
 bow_layer_size: 400
