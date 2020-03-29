@@ -67,9 +67,11 @@ class VRNN(pl.LightningModule):
         z_latent = initial_z
         user_outputs, system_outputs = [], []
         q_zs, p_zs, z_samples = [], [], []
+        z_samples_matrix = []
         bow_logits_list = []
         for bs in batch_sizes:
-            decoded_user_outputs, decoded_system_outputs, vrnn_hidden_state, q_z, p_z, z_sample, bow_logits =\
+            decoded_user_outputs, decoded_system_outputs, vrnn_hidden_state,\
+            q_z, p_z, z_sample, bow_logits, z_samples_lst =\
                 self.vae_cell(user_dials_data[offset:offset+bs],
                               user_lens_data[offset:offset+bs],
                               system_dials_data[offset:offset+bs],
@@ -80,6 +82,7 @@ class VRNN(pl.LightningModule):
             user_outputs.append(decoded_user_outputs)
             system_outputs.append(decoded_system_outputs)
             q_zs.extend(q_z)
+            z_samples_matrix.extend(z_samples_lst)
             p_zs.extend(p_z)
             if self.config['with_bow_loss']:
                 bow_logits_list.extend(bow_logits)
@@ -91,6 +94,9 @@ class VRNN(pl.LightningModule):
             torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
         z_samples, lens = pad_packed_sequence(PackedSequence(
             torch.stack(z_samples), batch_sizes, sorted_indices, unsorted_indices))
+        z_samples_matrix, lens = pad_packed_sequence(PackedSequence(
+            torch.stack(z_samples_matrix), batch_sizes, sorted_indices, unsorted_indices))
+
         if self.config['with_bow_loss']:
             bow_logits, lens = pad_packed_sequence(PackedSequence(
                 torch.stack(bow_logits_list), batch_sizes, sorted_indices, unsorted_indices))
@@ -107,7 +113,7 @@ class VRNN(pl.LightningModule):
             system_lens_data, batch_sizes, sorted_indices, unsorted_indices))
 
         return user_dials, user_outputs, user_lens, system_dials, system_outputs,\
-               system_lens, q_zs, p_zs, z_samples, bow_logits
+               system_lens, q_zs, p_zs, z_samples, bow_logits, z_samples_matrix
 
     def cross_entropy_loss(self, logits, labels, reduction='mean'):
         return F.nll_loss(logits, labels, reduction=reduction)
@@ -166,7 +172,7 @@ class VRNN(pl.LightningModule):
     def _step(self, batch):
         user_dials, system_dials, user_lens, system_lens, dial_lens = batch
         user_dials, user_outputs, user_lens, system_dials, system_outputs,\
-            system_lens, q_zs, p_zs, z_samples, bow_logits =\
+            system_lens, q_zs, p_zs, z_samples, bow_logits, _ =\
             self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
         total_user_decoder_loss = self._compute_decoder_loss(user_outputs, user_dials, user_lens)
         total_system_decoder_loss = self._compute_decoder_loss(system_outputs, system_dials, system_lens)
@@ -214,16 +220,17 @@ class VRNN(pl.LightningModule):
     def predict(self, batch, inv_vocab):
         user_dials, system_dials, user_lens, system_lens, dial_lens = batch
         user_dials, user_outputs, user_lens, system_dials, system_outputs,\
-            system_lens, q_zs, p_zs, z_samples, bow_logits = \
+            system_lens, q_zs, p_zs, z_samples, bow_logits, z_samples_matrix = \
             self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
 
         all_user_predictions, all_user_gt = [], []
         all_system_predictions, all_system_gt = [], []
         self._post_process_forwarded_batch(user_outputs, user_dials, all_user_predictions, all_user_gt, inv_vocab)
         self._post_process_forwarded_batch(system_outputs, system_dials, all_system_predictions, all_system_gt, inv_vocab)
-        all_samples = (torch.argmax(z_samples, dim=2).numpy())
-
-        return all_user_predictions, all_user_gt, all_system_predictions, all_system_gt, all_samples
+        all_samples = torch.argmax(z_samples, dim=2).numpy()
+        all_samples_matrix = torch.argmax(z_samples_matrix, dim=2).numpy()
+        return all_user_predictions, all_user_gt, all_system_predictions,\
+               all_system_gt, all_samples, all_samples_matrix
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)

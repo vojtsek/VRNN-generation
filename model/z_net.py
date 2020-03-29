@@ -27,7 +27,7 @@ class ZNet(torch.nn.Module):
         z_posterior_logits = self.posterior_net1(x)
         z_posterior_logits = self.posterior_projection(z_posterior_logits)
         if self.config['z_type'] == 'gumbel':
-            q_z = F.softmax(z_posterior_logits)
+            q_z = F.softmax(z_posterior_logits, dim=-1)
             log_q_z = torch.log(q_z + 1e-20)
             z_samples, z_samples_logits = gumbel_softmax_sample(z_posterior_logits, self.config['gumbel_softmax_tmp'])
         else:

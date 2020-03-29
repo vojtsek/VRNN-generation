@@ -22,13 +22,15 @@ class VAECell(torch.nn.Module):
 
         self.z_nets = torch.nn.ModuleList([ZNet(config) for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
-                                   config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+                                   config['posterior_ff_sizes2'][-1] +
+                                   config['vrnn_hidden_size'],
                                    # config['posterior_ff_sizes2'][-1],
                                    config['decoder_hidden_size'],
                                    config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
         self.system_dec = RNNDecoder(embeddings,
-                                     config['posterior_ff_sizes2'][-1] + config['vrnn_hidden_size'],
+                                     config['posterior_ff_sizes2'][-1] +
+                                     config['vrnn_hidden_size'],
                                      # config['posterior_ff_sizes2'][-1],
                                      config['decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
@@ -81,9 +83,9 @@ class VAECell(torch.nn.Module):
         z_projection_lst, q_z_lst, z_samples_lst = zip(*[z_net(vrnn_hidden_cat_input) for z_net in self.z_nets])
 
         # todo: weighted sum
-        z_posterior_projection = self.weighted_sum(torch.stack(z_projection_lst))
-        q_z = self.weighted_sum(torch.stack(q_z_lst))
-        z_samples = self.weighted_sum(torch.stack(z_samples_lst))
+        z_posterior_projection = self.aggregate(torch.stack(z_projection_lst))
+        q_z = self.aggregate(torch.stack(q_z_lst))
+        z_samples = self.aggregate(torch.stack(z_samples_lst))
 
         # prior network
         z_prior_logits = self.prior_net(z_previous)
@@ -105,13 +107,18 @@ class VAECell(torch.nn.Module):
         vrnn_input = torch.cat([z_posterior_projection, input_concatenated], dim=1)
         next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 
-        return decoded_user_outputs, decoded_system_outputs, next_vrnn_hidden, q_z, p_z, z_samples, bow_logits
+        z_samples_lst = torch.stack(z_samples_lst).transpose(1, 0).transpose(2, 1)
 
-    def weighted_sum(self, x):
+        return decoded_user_outputs, decoded_system_outputs,\
+               next_vrnn_hidden, q_z, p_z, z_samples, bow_logits, z_samples_lst
+
+    def aggregate(self, x):
         if x.shape[0] == 1:
             return x.squeeze(0)
+        # concatenation
+        # return x.transpose(1, 0).reshape(-1, self.config['number_z_vectors'] * x.shape[-1])
         x = x.transpose(1, 0)
-        x = self.aggregation_layer(x)
+        x = torch.sum(x, dim=1)
         return x.squeeze(1)
         # x = x.transpose(1, 0)
         # summed = torch.matmul(self.weights, x)

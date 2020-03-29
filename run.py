@@ -8,6 +8,7 @@ import yaml
 from torchvision.transforms import Compose as TorchCompose
 from torch.utils.data import DataLoader as TorchDataLoader
 import pytorch_lightning as pl
+from pytorch_lightning.callbacks import EarlyStopping
 
 from .dataset import DataReader, CamRestReader, MultiWOZReader,\
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
@@ -61,11 +62,12 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
         trainer = pl.Trainer(
-            min_epochs=10,
-            max_epochs=50,
+            min_epochs=25,
+            max_epochs=80,
             callbacks=callbacks,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
+            early_stop_callback=EarlyStopping(patience=3),
             progress_bar_refresh_rate=1
         )
         trainer.fit(model)
@@ -81,7 +83,8 @@ def main(flags):
             open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd:
 
         for d, val_batch in enumerate(loader):
-            all_user_predictions, all_user_gt, all_system_predictions, all_system_gt, all_z_samples =\
+            all_user_predictions, all_user_gt, all_system_predictions,\
+                all_system_gt, all_z_samples, all_z_samples_matrix =\
                 model.predict(val_batch, embeddings.id2w)
             assert len(all_user_predictions) == len(all_system_predictions) == len(all_z_samples)
             print(f'Dialogue {d+1}', file=all_fd)
@@ -92,14 +95,15 @@ def main(flags):
                 print(f'\tORIG:', file=all_fd)
                 print(f'\t{" ".join(all_user_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(all_system_gt[i])}', file=all_fd)
-                print(f'\tZ: {all_z_samples[i]}', file=all_fd)
+                # print(f'\tZ: {all_z_samples[i]}', file=all_fd)
+                print(f'\tZ: {" ".join([str(z) for z in all_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
 
                 print(" ".join(all_user_predictions[i]), file=user_fd)
                 print(" ".join(all_system_predictions[i]), file=system_fd)
                 print(" ".join(all_user_gt[i]), file=user_gt_fd)
                 print(" ".join(all_system_gt[i]), file=system_gt_fd)
-                print(all_z_samples[i][0], file=z_post_fd)
+                print(" ".join([str(z) for z in all_z_samples_matrix[i][0]]), file=z_post_fd)
 
             print('', file=user_fd)
             print('', file=system_fd)
