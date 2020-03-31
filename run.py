@@ -65,8 +65,8 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
         trainer = pl.Trainer(
-            min_epochs=1,
-            max_epochs=1,
+            min_epochs=25,
+            max_epochs=80,
             callbacks=callbacks,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),

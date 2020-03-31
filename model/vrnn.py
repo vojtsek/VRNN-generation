@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import DataLoader
 
-from . import VAECell, VAECellOutput
+from . import VAECell
 from ..dataset.embedding import Embeddings
 from ..utils import zero_hidden
 
@@ -28,7 +28,8 @@ class VRNN(pl.LightningModule):
         # input is 'projected z sample' concat user and system encoded
         # hidden is configured
         self.vrnn_cell = torch.nn.LSTMCell(
-            config['posterior_ff_sizes2'][-1] +
+            # both input (possibly bidirectional) + both post logits
+            config['posterior_ff_sizes2'][-1] * 2 +
             config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
@@ -77,14 +78,14 @@ class VRNN(pl.LightningModule):
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        z_latent[:bs])
             offset += bs
-            user_outputs.append(vae_output.decoded_user_outputs)
-            system_outputs.append(vae_output.decoded_system_outputs)
-            q_zs.extend(vae_output.q_z)
-            z_samples_matrix.extend(vae_output.z_samples_lst)
+            user_outputs.append(vae_output.user_turn_output.decoded_outputs)
+            system_outputs.append(vae_output.system_turn_output.decoded_outputs)
+            q_zs.extend(vae_output.user_turn_output.q_z)
+            z_samples_matrix.extend(vae_output.user_turn_output.z_samples_lst)
             p_zs.extend(vae_output.p_z)
             if self.config['with_bow_loss']:
-                bow_logits_list.extend(vae_output.bow_logits)
-            z_samples.extend(vae_output.z_samples)
+                bow_logits_list.extend(vae_output.user_turn_output.bow_logits)
+            z_samples.extend(vae_output.user_turn_output.z_samples)
 
         q_zs, lens = pad_packed_sequence(PackedSequence(
             torch.stack(q_zs), batch_sizes, sorted_indices, unsorted_indices))

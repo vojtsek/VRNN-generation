@@ -11,7 +11,7 @@ class ZNet(torch.nn.Module):
         super(ZNet, self).__init__()
         self.config = config
         self.posterior_net1 = FFNet(config['input_encoder_hidden_size'] *
-                                    2 * (1 + int(config['bidirectional_encoder'])) +
+                                    (1 + int(config['bidirectional_encoder'])) +
                                     config['vrnn_hidden_size'],
                                     config['posterior_ff_sizes1'],
                                     drop_prob=config['drop_prob'])
