@@ -8,6 +8,7 @@ import yaml
 from torchvision.transforms import Compose as TorchCompose
 from torch.utils.data import DataLoader as TorchDataLoader
 import pytorch_lightning as pl
+import torch
 from pytorch_lightning.callbacks import EarlyStopping
 
 from .dataset import DataReader, CamRestReader, MultiWOZReader,\
@@ -43,7 +44,7 @@ def main(flags):
     embeddings = Embeddings(config['embedding_fn'],
                             # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=list(data_reader.all_words.keys()))
-    embeddings.add_tokens(delexicalizer.all_tags)
+    embeddings.add_tokens_rnd(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
@@ -57,7 +58,9 @@ def main(flags):
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
 
     if flags.model_path is not None:
-        model = VRNN.load_from_checkpoint(flags.model_path)
+        checkpoint = torch.load(flags.model_path)
+        model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
+        model.load_state_dict(checkpoint['state_dict'])
     else:
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]

@@ -129,8 +129,8 @@ class VRNN(pl.LightningModule):
             reference_serialized, lens, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
             total_loss += self.cross_entropy_loss(output_serialized, reference_serialized,
-                                                  reduction='sum')
-            total_count += reference_serialized.shape[0]
+                                                  reduction='mean')
+            total_count += 1
         return total_loss / total_count
 
     def _compute_bow_loss(self, bow_logits, outputs, reference, output_lens):

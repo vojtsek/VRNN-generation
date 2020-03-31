@@ -1,5 +1,5 @@
 import pickle
-import random
+import numpy
 import io
 
 import numpy as np
@@ -47,24 +47,29 @@ class Embeddings:
                     if (extern_vocab is not None and word not in extern_vocab)\
                             or (word in self._w2id):
                         continue
-                    self._w2id[word] = len(self._data)
-                    self._data.append(list(map(float, tokens[1:])))
-                self.add_tokens(Embeddings.SPEC_TOKENS)
+                    self._add_word(word, list(map(float, tokens[1:])))
+                    self.add_tokens_rnd(extern_vocab)
+                self.add_tokens_rnd(Embeddings.SPEC_TOKENS)
             if out_fn is not None:
                 with open(out_fn, 'wb') as of:
                     pickle.dump((self._data, self._w2id), of)
-        self.id2w = {y: x for x, y in self._w2id.items()}
+        # self.id2w = {y: x for x, y in self._w2id.items()}
         self.w2id = Embeddings.MyDefDict(self._w2id)
 
     def __getitem__(self, key):
         idx = self.w2id[key] if isinstance(key, str) else key
         return self._data[idx]
 
-    def add_tokens(self, tokens):
+    def _add_word(self, word, vec):
+        if word in self._w2id:
+            return
+        self._w2id[word] = len(self._data)
+        self.id2w[len(self._data)] = word
+        self._data.append(vec)
+
+    def add_tokens_rnd(self, tokens):
         for tk in tokens:
-            self._w2id[tk] = len(self._data)
-            self.id2w[len(self._data)] = tk
-            self._data.append([random.gauss(0, 1) for _ in range(self.d)])
+            self._add_word(tk, numpy.random.randn(self.d))
 
     def embed_tokens(self, tokens, token_weights=None):
         if token_weights is None:
