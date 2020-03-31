@@ -34,6 +34,7 @@ class Embeddings:
             with open(data_fn, 'rb') as inf:
                 print('Loading embeddings from "{}"'.format(data_fn))
                 self._data, self._w2id = pickle.load(inf)
+                self.id2w = {y: x for x, y in self._w2id.items()}
                 self.n, self.d = len(self._data), len(self._data[0])
         except pickle.UnpicklingError:
             with io.open(data_fn, 'r', encoding='utf-8', newline='\n', errors='ignore') as inf:
@@ -48,12 +49,11 @@ class Embeddings:
                             or (word in self._w2id):
                         continue
                     self._add_word(word, list(map(float, tokens[1:])))
-                    self.add_tokens_rnd(extern_vocab)
+                self.add_tokens_rnd(extern_vocab)
                 self.add_tokens_rnd(Embeddings.SPEC_TOKENS)
             if out_fn is not None:
                 with open(out_fn, 'wb') as of:
                     pickle.dump((self._data, self._w2id), of)
-        # self.id2w = {y: x for x, y in self._w2id.items()}
         self.w2id = Embeddings.MyDefDict(self._w2id)
 
     def __getitem__(self, key):

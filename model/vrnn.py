@@ -5,7 +5,7 @@ import pytorch_lightning as pl
 from torch.nn.utils.rnn import PackedSequence, pack_padded_sequence, pad_packed_sequence
 from torch.utils.data import DataLoader
 
-from . import VAECell
+from . import VAECell, VAECellOutput
 from ..dataset.embedding import Embeddings
 from ..utils import zero_hidden
 
@@ -70,23 +70,21 @@ class VRNN(pl.LightningModule):
         z_samples_matrix = []
         bow_logits_list = []
         for bs in batch_sizes:
-            decoded_user_outputs, decoded_system_outputs, vrnn_hidden_state,\
-            q_z, p_z, z_sample, bow_logits, z_samples_lst =\
-                self.vae_cell(user_dials_data[offset:offset+bs],
-                              user_lens_data[offset:offset+bs],
-                              system_dials_data[offset:offset+bs],
-                              system_lens_data[offset:offset+bs],
-                              (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
-                              z_latent[:bs])
+            vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
+                                       user_lens_data[offset:offset+bs],
+                                       system_dials_data[offset:offset+bs],
+                                       system_lens_data[offset:offset+bs],
+                                       (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
+                                       z_latent[:bs])
             offset += bs
-            user_outputs.append(decoded_user_outputs)
-            system_outputs.append(decoded_system_outputs)
-            q_zs.extend(q_z)
-            z_samples_matrix.extend(z_samples_lst)
-            p_zs.extend(p_z)
+            user_outputs.append(vae_output.decoded_user_outputs)
+            system_outputs.append(vae_output.decoded_system_outputs)
+            q_zs.extend(vae_output.q_z)
+            z_samples_matrix.extend(vae_output.z_samples_lst)
+            p_zs.extend(vae_output.p_z)
             if self.config['with_bow_loss']:
-                bow_logits_list.extend(bow_logits)
-            z_samples.extend(z_sample)
+                bow_logits_list.extend(vae_output.bow_logits)
+            z_samples.extend(vae_output.z_samples)
 
         q_zs, lens = pad_packed_sequence(PackedSequence(
             torch.stack(q_zs), batch_sizes, sorted_indices, unsorted_indices))
@@ -112,8 +110,17 @@ class VRNN(pl.LightningModule):
         system_lens, lens = pad_packed_sequence(PackedSequence(
             system_lens_data, batch_sizes, sorted_indices, unsorted_indices))
 
-        return user_dials, user_outputs, user_lens, system_dials, system_outputs,\
-               system_lens, q_zs, p_zs, z_samples, bow_logits, z_samples_matrix
+        return VRNNStepOutput(user_dials,
+                              user_outputs,
+                              user_lens,
+                              system_dials,
+                              system_outputs,
+                              system_lens,
+                              q_zs,
+                              p_zs,
+                              z_samples,
+                              bow_logits,
+                              z_samples_matrix)
 
     def cross_entropy_loss(self, logits, labels, reduction='mean'):
         return F.nll_loss(logits, labels, reduction=reduction)
@@ -170,20 +177,25 @@ class VRNN(pl.LightningModule):
         return total_kl_loss / count
 
     def _step(self, batch):
-        user_dials, system_dials, user_lens, system_lens, dial_lens = batch
-        user_dials, user_outputs, user_lens, system_dials, system_outputs,\
-            system_lens, q_zs, p_zs, z_samples, bow_logits, _ =\
-            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
-        total_user_decoder_loss = self._compute_decoder_loss(user_outputs, user_dials, user_lens)
-        total_system_decoder_loss = self._compute_decoder_loss(system_outputs, system_dials, system_lens)
+        # user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        step_output = self.forward(*batch)
+        total_user_decoder_loss = self._compute_decoder_loss(step_output.user_outputs,
+                                                             step_output.user_dials,
+                                                             step_output.user_lens)
+        total_system_decoder_loss = self._compute_decoder_loss(step_output.system_outputs,
+                                                               step_output.system_dials,
+                                                               step_output.system_lens)
         if self.config['with_bow_loss']:
-            total_bow_loss = self._compute_bow_loss(bow_logits, user_outputs, user_dials, user_lens)
+            total_bow_loss = self._compute_bow_loss(step_output.bow_logits,
+                                                    step_output.user_outputs,
+                                                    step_output.user_dials,
+                                                    step_output.user_lens)
         else:
             total_bow_loss = 0
 
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
         if self.config['z_type'] == 'cont':
-            kl_loss = self._compute_cvae_kl_loss(q_zs)
+            kl_loss = self._compute_cvae_kl_loss(step_output.q_zs)
         else:
             # todo DVRNN prior regularization
             kl_loss = 0
@@ -218,19 +230,29 @@ class VRNN(pl.LightningModule):
             ground_truths.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
 
     def predict(self, batch, inv_vocab):
-        user_dials, system_dials, user_lens, system_lens, dial_lens = batch
-        user_dials, user_outputs, user_lens, system_dials, system_outputs,\
-            system_lens, q_zs, p_zs, z_samples, bow_logits, z_samples_matrix = \
-            self.forward(user_dials, system_dials, user_lens, system_lens, dial_lens)
+        # user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        step_output = self.forward(*batch)
 
         all_user_predictions, all_user_gt = [], []
         all_system_predictions, all_system_gt = [], []
-        self._post_process_forwarded_batch(user_outputs, user_dials, all_user_predictions, all_user_gt, inv_vocab)
-        self._post_process_forwarded_batch(system_outputs, system_dials, all_system_predictions, all_system_gt, inv_vocab)
-        all_samples = torch.argmax(z_samples, dim=2).numpy()
-        all_samples_matrix = torch.argmax(z_samples_matrix, dim=2).numpy()
-        return all_user_predictions, all_user_gt, all_system_predictions,\
-               all_system_gt, all_samples, all_samples_matrix
+        self._post_process_forwarded_batch(step_output.user_outputs,
+                                           step_output.user_dials,
+                                           all_user_predictions,
+                                           all_user_gt,
+                                           inv_vocab)
+        self._post_process_forwarded_batch(step_output.system_outputs,
+                                           step_output.system_dials,
+                                           all_system_predictions,
+                                           all_system_gt,
+                                           inv_vocab)
+        all_samples = torch.argmax(step_output.z_samples, dim=2).numpy()
+        all_samples_matrix = torch.argmax(step_output.z_samples_matrix, dim=2).numpy()
+        return PredictedOuputs(all_user_predictions,
+                               all_user_gt,
+                               all_system_predictions,
+                               all_system_gt,
+                               all_samples,
+                               all_samples_matrix)
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
@@ -261,3 +283,45 @@ def checkpoint_callback(filepath):
         mode='min',
         prefix=''
     )
+
+
+class VRNNStepOutput:
+    def __init__(self,
+                 user_dials=None,
+                 user_outputs=None,
+                 user_lens=None,
+                 system_dials=None,
+                 system_outputs=None,
+                 system_lens=None,
+                 q_zs=None,
+                 p_zs=None,
+                 z_samples=None,
+                 bow_logits=None,
+                 z_samples_matrix=None):
+        self.user_dials = user_dials
+        self.user_outputs = user_outputs
+        self.user_lens = user_lens
+        self.system_dials = system_dials
+        self.system_outputs = system_outputs
+        self.system_lens = system_lens
+        self.q_zs = q_zs
+        self.p_zs = p_zs
+        self.z_samples = z_samples
+        self.bow_logits = bow_logits
+        self.z_samples_matrix = z_samples_matrix
+
+
+class PredictedOuputs:
+    def __init__(self,
+                 all_user_predictions=None,
+                 all_user_gt=None,
+                 all_system_predictions=None,
+                 all_system_gt=None,
+                 all_z_samples=None,
+                 all_z_samples_matrix=None):
+        self.all_user_predictions = all_user_predictions
+        self.all_user_gt = all_user_gt
+        self.all_system_predictions = all_system_predictions
+        self.all_system_gt = all_system_gt
+        self.all_z_samples = all_z_samples
+        self.all_z_samples_matrix = all_z_samples_matrix

@@ -14,7 +14,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 from .dataset import DataReader, CamRestReader, MultiWOZReader,\
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 
-from .model.vrnn import VRNN, EpochEndCb, checkpoint_callback
+from .model import VRNN, EpochEndCb, checkpoint_callback
 
 
 def main(flags):
@@ -65,8 +65,8 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
         trainer = pl.Trainer(
-            min_epochs=25,
-            max_epochs=80,
+            min_epochs=1,
+            max_epochs=1,
             callbacks=callbacks,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
@@ -86,27 +86,27 @@ def main(flags):
             open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd:
 
         for d, val_batch in enumerate(loader):
-            all_user_predictions, all_user_gt, all_system_predictions,\
-                all_system_gt, all_z_samples, all_z_samples_matrix =\
-                model.predict(val_batch, embeddings.id2w)
-            assert len(all_user_predictions) == len(all_system_predictions) == len(all_z_samples)
+            predictions = model.predict(val_batch, embeddings.id2w)
+            assert len(predictions.all_user_predictions) ==\
+                len(predictions.all_system_predictions) ==\
+                len(predictions.all_z_samples)
             print(f'Dialogue {d+1}', file=all_fd)
-            for i in range(len(all_user_predictions)):
+            for i in range(len(predictions.all_user_predictions)):
                 print(f'\tTurn {i+1}', file=all_fd)
-                print(f'\t{" ".join(all_user_predictions[i])}', file=all_fd)
-                print(f'\t{" ".join(all_system_predictions[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_system_predictions[i])}', file=all_fd)
                 print(f'\tORIG:', file=all_fd)
-                print(f'\t{" ".join(all_user_gt[i])}', file=all_fd)
-                print(f'\t{" ".join(all_system_gt[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_user_gt[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_system_gt[i])}', file=all_fd)
                 # print(f'\tZ: {all_z_samples[i]}', file=all_fd)
-                print(f'\tZ: {" ".join([str(z) for z in all_z_samples_matrix[i][0]])}', file=all_fd)
+                print(f'\tZ: {" ".join([str(z) for z in predictions.all_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
 
-                print(" ".join(all_user_predictions[i]), file=user_fd)
-                print(" ".join(all_system_predictions[i]), file=system_fd)
-                print(" ".join(all_user_gt[i]), file=user_gt_fd)
-                print(" ".join(all_system_gt[i]), file=system_gt_fd)
-                print(" ".join([str(z) for z in all_z_samples_matrix[i][0]]), file=z_post_fd)
+                print(" ".join(predictions.all_user_predictions[i]), file=user_fd)
+                print(" ".join(predictions.all_system_predictions[i]), file=system_fd)
+                print(" ".join(predictions.all_user_gt[i]), file=user_gt_fd)
+                print(" ".join(predictions.all_system_gt[i]), file=system_gt_fd)
+                print(" ".join([str(z) for z in predictions.all_z_samples_matrix[i][0]]), file=z_post_fd)
 
             print('', file=user_fd)
             print('', file=system_fd)

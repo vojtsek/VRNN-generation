@@ -111,8 +111,14 @@ class VAECell(torch.nn.Module):
 
         z_samples_lst = torch.stack(z_samples_lst).transpose(1, 0).transpose(2, 1)
 
-        return decoded_user_outputs, decoded_system_outputs,\
-               next_vrnn_hidden, q_z, p_z, z_samples, bow_logits, z_samples_lst
+        return VAECellOutput(decoded_user_outputs=decoded_user_outputs,
+                             decoded_system_outputs=decoded_system_outputs,
+                             next_vrnn_hidden=next_vrnn_hidden,
+                             q_z=q_z,
+                             p_z=p_z,
+                             z_samples=z_samples,
+                             bow_logits=bow_logits,
+                             z_samples_lst=z_samples_lst)
 
     def aggregate(self, x):
         if x.shape[0] == 1:
@@ -125,3 +131,23 @@ class VAECell(torch.nn.Module):
         # x = x.transpose(1, 0)
         # summed = torch.matmul(self.weights, x)
         # return summed.squeeze(1)
+
+
+class VAECellOutput:
+    def __init__(self,
+                 decoded_user_outputs=None,
+                 decoded_system_outputs=None,
+                 next_vrnn_hidden=None,
+                 q_z=None,
+                 p_z=None,
+                 z_samples=None,
+                 bow_logits=None,
+                 z_samples_lst=None):
+        self.decoded_user_outputs = decoded_user_outputs
+        self.decoded_system_outputs = decoded_system_outputs
+        self.next_vrnn_hidden = next_vrnn_hidden
+        self.q_z = q_z
+        self.p_z = p_z
+        self.z_samples = z_samples
+        self.bow_logits = bow_logits
+        self.z_samples_lst = z_samples_lst
