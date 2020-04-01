@@ -159,7 +159,6 @@ class TurnOutput:
 class VAECellOutput:
     def __init__(self,
                  next_vrnn_hidden=None,
-                 p_z=None,
                  user_turn_output: TurnOutput=None,
                  system_turn_output: TurnOutput=None):
         self.next_vrnn_hidden = next_vrnn_hidden

@@ -206,6 +206,7 @@ class VRNN(pl.LightningModule):
             kl_loss += self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
+        kl_loss = 0
         loss = decoder_loss + lambda_i * total_bow_loss + kl_loss
         return loss
 

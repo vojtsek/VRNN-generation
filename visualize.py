@@ -44,9 +44,9 @@ def visualize_z_distribution(z_data, out_dir):
     ax.view_init(30, 90)
     plt.savefig(os.path.join(out_dir, 'z_3d.png'))
     #
-    # fig = px.scatter_3d(sns_df, x='turn_number', y='z_val_1', z='z_val_2',
-    #           color='turn_number')
-    # fig.show()
+    fig = px.scatter_3d(sns_df, x='turn_number', y='z_val_1', z='z_val_2',
+              color='turn_number')
+    fig.show()
 
 
 def read_z_data(z_data_fd, dial_len=None):

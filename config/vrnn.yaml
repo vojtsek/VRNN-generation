@@ -9,9 +9,9 @@ embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
 batch_size: 8
 drop_prob: 0.5
 bidirectional_encoder: true
-gumbel_softmax_tmp: 0.8
+gumbel_softmax_tmp: 5
 teacher_forcing_prob: 0.5
-number_z_vectors: 1
+number_z_vectors: 2
 with_bow_loss: false
 k_loss_coeff: 0.1
 alpha_coeff_step: 0.5
@@ -31,5 +31,5 @@ posterior_ff_sizes2:
 prior_ff_sizes:
   - 100
   - 100
-z_logits_dim: 20
+z_logits_dim: 40
 bow_layer_size: 400

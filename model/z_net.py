@@ -29,18 +29,21 @@ class ZNet(torch.nn.Module):
     def forward(self, x, z_previous):
         z_posterior_logits = self.posterior_net1(x)
         z_posterior_logits = self.posterior_projection(z_posterior_logits)
-        if self.config['z_type'] == 'gumbel':
-            q_z = F.softmax(z_posterior_logits, dim=-1)
-            z_samples, z_samples_logits = gumbel_softmax_sample(z_posterior_logits, self.config['gumbel_softmax_tmp'])
-        else:
-            mu = z_posterior_logits[:, :self.config['z_logits_dim']]
-            logvar = z_posterior_logits[:, self.config['z_logits_dim']:]
-            q_z = z_posterior_logits
-            z_samples = normal_sample(mu, logvar)
-        z_posterior_projection = self.posterior_net2(z_samples)
-
         z_prior_logits = self.prior_net(z_previous)
         z_prior_logits = self.prior_projection(z_prior_logits)
         p_z = F.softmax(z_prior_logits, dim=-1)
 
-        return z_posterior_projection, q_z, z_samples, p_z
+        if self.config['z_type'] == 'gumbel':
+            q_z = F.softmax(z_posterior_logits, dim=-1)
+            q_z_samples, q_z_samples_logits =\
+                gumbel_softmax_sample(z_posterior_logits, self.config['gumbel_softmax_tmp'])
+        else:
+            mu = z_posterior_logits[:, :self.config['z_logits_dim']]
+            logvar = z_posterior_logits[:, self.config['z_logits_dim']:]
+            q_z = z_posterior_logits
+            q_z_samples = normal_sample(mu, logvar)
+        p_z_samples, p_z_samples_logits =\
+            gumbel_softmax_sample(z_prior_logits, self.config['gumbel_softmax_tmp'])
+        z_posterior_projection = self.posterior_net2(q_z_samples)
+
+        return z_posterior_projection, q_z, p_z_samples, p_z
