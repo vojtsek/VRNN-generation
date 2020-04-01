@@ -47,7 +47,7 @@ class VRNN(pl.LightningModule):
         system_dials = system_dials[batch_sort_perm].transpose(1, 0)
         system_lens = system_lens[batch_sort_perm].transpose(1, 0)
         dial_lens = dial_lens[batch_sort_perm]
-        
+
         user_dials_data, batch_sizes, sorted_indices, unsorted_indices =\
             pack_padded_sequence(user_dials, dial_lens, enforce_sorted=False)
         user_lens_data, _, __, ___ =\
@@ -67,7 +67,8 @@ class VRNN(pl.LightningModule):
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
         z_latent = initial_z
         user_outputs, system_outputs = [], []
-        q_zs, p_zs, z_samples = [], [], []
+        user_q_zs, user_p_zs, z_samples = [], [], []
+        system_q_zs, system_p_zs = [], []
         z_samples_matrix = []
         bow_logits_list = []
         for bs in batch_sizes:
@@ -80,65 +81,49 @@ class VRNN(pl.LightningModule):
             offset += bs
             user_outputs.append(vae_output.user_turn_output.decoded_outputs)
             system_outputs.append(vae_output.system_turn_output.decoded_outputs)
-            q_zs.extend(vae_output.user_turn_output.q_z)
+            user_q_zs.extend(vae_output.user_turn_output.q_z)
             z_samples_matrix.extend(vae_output.user_turn_output.z_samples_lst)
-            p_zs.extend(vae_output.p_z)
+            user_p_zs.extend(vae_output.user_turn_output.p_z)
+            system_q_zs.extend(vae_output.system_turn_output.q_z)
+            system_p_zs.extend(vae_output.system_turn_output.p_z)
             if self.config['with_bow_loss']:
                 bow_logits_list.extend(vae_output.user_turn_output.bow_logits)
             z_samples.extend(vae_output.user_turn_output.z_samples)
 
-        q_zs, lens = pad_packed_sequence(PackedSequence(
-            torch.stack(q_zs), batch_sizes, sorted_indices, unsorted_indices))
-        p_zs, lens = pad_packed_sequence(PackedSequence(
-            torch.stack(p_zs), batch_sizes, sorted_indices, unsorted_indices))
-        z_samples, lens = pad_packed_sequence(PackedSequence(
-            torch.stack(z_samples), batch_sizes, sorted_indices, unsorted_indices))
-        z_samples_matrix, lens = pad_packed_sequence(PackedSequence(
-            torch.stack(z_samples_matrix), batch_sizes, sorted_indices, unsorted_indices))
+        def _pad_packed(seq):
+            if isinstance(seq, list):
+                seq = torch.stack(seq)
+            seq_padded, _ = pad_packed_sequence(PackedSequence(
+                seq, batch_sizes, sorted_indices, unsorted_indices))
+            return seq_padded
 
-        if self.config['with_bow_loss']:
-            bow_logits, lens = pad_packed_sequence(PackedSequence(
-                torch.stack(bow_logits_list), batch_sizes, sorted_indices, unsorted_indices))
-        else:
-            bow_logits = None
+        return VRNNStepOutput(user_dials=_pad_packed(user_dials_data),
+                              user_outputs=user_outputs,
+                              user_lens=_pad_packed(user_lens_data),
+                              system_dials=_pad_packed(system_dials_data),
+                              system_outputs=system_outputs,
+                              system_lens=_pad_packed(system_lens_data),
+                              user_q_zs=_pad_packed(user_q_zs),
+                              user_p_zs=_pad_packed(user_p_zs),
+                              system_q_zs=_pad_packed(system_q_zs),
+                              system_p_zs=_pad_packed(system_p_zs),
+                              z_samples=_pad_packed(z_samples),
+                              bow_logits=_pad_packed(bow_logits_list) if self.config['with_bow_loss'] else None,
+                              z_samples_matrix=_pad_packed(z_samples_matrix))
 
-        user_dials, lens = pad_packed_sequence(PackedSequence(
-            user_dials_data, batch_sizes, sorted_indices, unsorted_indices))
-        user_lens, lens = pad_packed_sequence(PackedSequence(
-            user_lens_data, batch_sizes, sorted_indices, unsorted_indices))
-        system_dials, lens = pad_packed_sequence(PackedSequence(
-            system_dials_data, batch_sizes, sorted_indices, unsorted_indices))
-        system_lens, lens = pad_packed_sequence(PackedSequence(
-            system_lens_data, batch_sizes, sorted_indices, unsorted_indices))
-
-        return VRNNStepOutput(user_dials,
-                              user_outputs,
-                              user_lens,
-                              system_dials,
-                              system_outputs,
-                              system_lens,
-                              q_zs,
-                              p_zs,
-                              z_samples,
-                              bow_logits,
-                              z_samples_matrix)
-
-    def cross_entropy_loss(self, logits, labels, reduction='mean'):
-        return F.nll_loss(logits, labels, reduction=reduction)
-
-    def _compute_decoder_loss(self, outputs, reference, output_lens):
+    def _compute_decoder_ce_loss(self, outputs, reference, output_lens):
         total_loss = 0
         total_count = 0
         for i, uo in enumerate(outputs):
+            batch_size = uo.shape[1]
             ud_reference = reference[i].transpose(0, 1)[:uo.shape[0]]
-            batch_lens = output_lens[i, :uo.shape[1]]
+            batch_lens = output_lens[i, :batch_size]
             output_serialized, lens, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
             reference_serialized, lens, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
-            total_loss += self.cross_entropy_loss(output_serialized, reference_serialized,
-                                                  reduction='mean')
-            total_count += 1
+            total_loss += F.nll_loss(output_serialized, reference_serialized, reduction='mean') * batch_size
+            total_count += batch_size
         return total_loss / total_count
 
     def _compute_bow_loss(self, bow_logits, outputs, reference, output_lens):
@@ -167,25 +152,41 @@ class VRNN(pl.LightningModule):
                 total_count += l
         return total_loss / total_count
 
-    def _compute_cvae_kl_loss(self, q_zs):
-        total_kl_loss = 0
-        count = 0
-        for q_z in q_zs:
-            mu = q_z[:, :int(q_z.shape[1] / 2)]
-            logvar = q_z[:, int(q_z.shape[1] / 2):]
-            total_kl_loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=1), dim=0)
-            count += 1
-        return total_kl_loss / count
+    def _compute_vae_kl_loss(self, q_zs, dial_lens):
+        q_z, lens, sorted_indices, unsorted_indices = \
+            pack_padded_sequence(q_zs, dial_lens, enforce_sorted=False)
+
+        mu = q_z[:, :int(q_z.shape[1] / 2)]
+        logvar = q_z[:, int(q_z.shape[1] / 2):]
+        total_kl_loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=1), dim=0)
+        return total_kl_loss
+
+    def _compute_discrete_vae_kl_loss(self, q_zs, p_zs, dial_lens):
+
+        q_z, lens, sorted_indices, unsorted_indices = \
+            pack_padded_sequence(q_zs, dial_lens, enforce_sorted=False)
+        p_z, lens, sorted_indices, unsorted_indices = \
+            pack_padded_sequence(p_zs, dial_lens, enforce_sorted=False)
+
+        # todo: has to be regularized w.r.t. variable batch sizes
+        # if self.config['with_BPR']:
+        #     p_z = torch.mean(p_z, dim=0).unsqueeze(0)
+        #     q_z = torch.mean(q_z, dim=0).unsqueeze(0)
+        log_q_z = torch.log(q_z + 1e-20)
+        log_p_z = torch.log(p_z + 1e-20)
+        kl = (log_q_z - log_p_z) * q_z
+        kl = torch.mean(torch.sum(kl, dim=-1), dim=0)
+        return kl
 
     def _step(self, batch):
-        # user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        user_dials, system_dials, user_lens, system_lens, dial_lens = batch
         step_output = self.forward(*batch)
-        total_user_decoder_loss = self._compute_decoder_loss(step_output.user_outputs,
-                                                             step_output.user_dials,
-                                                             step_output.user_lens)
-        total_system_decoder_loss = self._compute_decoder_loss(step_output.system_outputs,
-                                                               step_output.system_dials,
-                                                               step_output.system_lens)
+        total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
+                                                                step_output.user_dials,
+                                                                step_output.user_lens)
+        total_system_decoder_loss = self._compute_decoder_ce_loss(step_output.system_outputs,
+                                                                  step_output.system_dials,
+                                                                  step_output.system_lens)
         if self.config['with_bow_loss']:
             total_bow_loss = self._compute_bow_loss(step_output.bow_logits,
                                                     step_output.user_outputs,
@@ -196,10 +197,13 @@ class VRNN(pl.LightningModule):
 
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
         if self.config['z_type'] == 'cont':
-            kl_loss = self._compute_cvae_kl_loss(step_output.q_zs)
+            # KL loss from N(0, 1)
+            kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
+            kl_loss += self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
-            # todo DVRNN prior regularization
-            kl_loss = 0
+            # KL loss between q_z and p_z
+            kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
+            kl_loss += self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
         loss = decoder_loss + lambda_i * total_bow_loss + kl_loss
@@ -294,8 +298,10 @@ class VRNNStepOutput:
                  system_dials=None,
                  system_outputs=None,
                  system_lens=None,
-                 q_zs=None,
-                 p_zs=None,
+                 user_q_zs=None,
+                 user_p_zs=None,
+                 system_q_zs=None,
+                 system_p_zs=None,
                  z_samples=None,
                  bow_logits=None,
                  z_samples_matrix=None):
@@ -305,8 +311,10 @@ class VRNNStepOutput:
         self.system_dials = system_dials
         self.system_outputs = system_outputs
         self.system_lens = system_lens
-        self.q_zs = q_zs
-        self.p_zs = p_zs
+        self.user_q_zs = user_q_zs
+        self.user_p_zs = user_p_zs
+        self.system_q_zs = system_q_zs
+        self.system_p_zs = system_p_zs
         self.z_samples = z_samples
         self.bow_logits = bow_logits
         self.z_samples_matrix = z_samples_matrix

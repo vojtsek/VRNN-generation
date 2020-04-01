@@ -65,8 +65,8 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
         trainer = pl.Trainer(
-            min_epochs=25,
-            max_epochs=80,
+            min_epochs=35,
+            max_epochs=100,
             callbacks=callbacks,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
@@ -76,7 +76,7 @@ def main(flags):
         trainer.fit(model)
 
     model.eval()
-    loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
+    loader = TorchDataLoader(train_dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, 'output_all.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \

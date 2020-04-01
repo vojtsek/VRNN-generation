@@ -1,5 +1,4 @@
  - normalization and tokenization properly
- - other losses - KL
  - add comments!
  - configurable z prior
- - system decoder conditioned on user dec
+ - user Z continuous, system Z latent?
