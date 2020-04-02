@@ -43,7 +43,7 @@ def main(flags):
 
     embeddings = Embeddings(config['embedding_fn'],
                             # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
-                            extern_vocab=list(data_reader.all_words.keys()))
+                            extern_vocab=[w for w, _ in data_reader.all_words.most_common(5000)])
     embeddings.add_tokens_rnd(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
@@ -65,8 +65,8 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
         trainer = pl.Trainer(
-            min_epochs=35,
-            max_epochs=100,
+            min_epochs=5,
+            max_epochs=15,
             callbacks=callbacks,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),

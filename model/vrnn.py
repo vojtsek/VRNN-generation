@@ -33,6 +33,7 @@ class VRNN(pl.LightningModule):
             config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
+        print(embeddings.matrix.shape)
         self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
         self.vae_cell = VAECell(self.embeddings_matrix, self.vrnn_cell, self.config)
         self.epoch_number = 0
