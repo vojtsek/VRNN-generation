@@ -68,8 +68,8 @@ def main(flags):
         callbacks = [EpochEndCb()]
         logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')
         trainer = pl.Trainer(
-            min_epochs=55,
-            max_epochs=80,
+            min_epochs=85,
+            max_epochs=100,
             callbacks=callbacks,
             logger=logger,
             show_progress_bar=True,

@@ -60,7 +60,7 @@ class VAECell(torch.nn.Module):
     #     todo: activation f?
 
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
-                  z_nets, decoders, z_previous, prev_z_posterior_projection=None):
+                  z_nets, decoders, z_previous, prev_z_posterior_projection=None, use_prior_eval=False):
         # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
         dials = self.embeddings(dials).transpose(1, 0)
         dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
@@ -69,21 +69,24 @@ class VAECell(torch.nn.Module):
         # concat fw+bw
         last_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
         vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
-        z_projection_lst, q_z_lst, posterior_z_samples_lst, p_z_lst =\
+        posterior_z_samples_lst, q_z_lst, prior_z_samples_lst, p_z_lst =\
             zip(*[z_net(vrnn_hidden_cat_input, z_previous) for z_net in z_nets])
-        z_posterior_projection = self.aggregate(torch.stack(z_projection_lst))
+        if not use_prior_eval or self.training:
+            sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
+        else:
+            sampled_latent = self.aggregate(torch.stack(prior_z_samples_lst))
         q_z = self.aggregate(torch.stack(q_z_lst))
         p_z = self.aggregate(torch.stack(p_z_lst))
-        z_samples = self.aggregate(torch.stack(posterior_z_samples_lst))
-        posterior_z_samples_lst = torch.stack(posterior_z_samples_lst).transpose(1, 0).transpose(2, 1)
+        z_samples = self.aggregate(torch.stack(prior_z_samples_lst))
+        prior_z_samples_lst = torch.stack(prior_z_samples_lst).transpose(1, 0).transpose(2, 1)
 
         if prev_z_posterior_projection is not None:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], z_posterior_projection, prev_z_posterior_projection], dim=1)
+                [previous_vrnn_hidden[0], sampled_latent, prev_z_posterior_projection], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], z_posterior_projection], dim=1)
+                [previous_vrnn_hidden[0], sampled_latent], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden], dim=1)
         all_decoded_outputs = []
         for i, decoder in enumerate(decoders):
@@ -100,9 +103,9 @@ class VAECell(torch.nn.Module):
                           q_z=q_z,
                           p_z=p_z,
                           z_samples=z_samples,
-                          z_samples_lst=posterior_z_samples_lst,
+                          z_samples_lst=prior_z_samples_lst,
                           bow_logits=bow_logits,
-                          z_posterior_projection=z_posterior_projection,
+                          z_posterior_projection=sampled_latent,
                           last_encoder_hidden=last_hidden)
 
     def forward(self,
@@ -129,7 +132,8 @@ class VAECell(torch.nn.Module):
                                             self.system_z_nets,
                                             [self.system_dec],
                                             z_previous,
-                                            prev_z_posterior_projection=user_turn_output.z_posterior_projection)
+                                            prev_z_posterior_projection=user_turn_output.z_posterior_projection,
+                                            use_prior_eval=True)
 
 
         z_posterior_projection = torch.cat([user_turn_output.z_posterior_projection,

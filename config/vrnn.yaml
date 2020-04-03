@@ -19,7 +19,7 @@ alpha_coeff_step: 0.5
 default_lambda_loss: 1.0
 with_BPR: false
 user_z_type: 'cont' # cont| gumbel;
-system_z_type: 'cont'
+system_z_type: 'gumbel'
 # layer sizes
 input_encoder_hidden_size: 150
 decoder_hidden_size: 300

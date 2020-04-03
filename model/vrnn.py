@@ -214,35 +214,44 @@ class VRNN(pl.LightningModule):
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss + total_nlu_decoder_loss) / 3
         if self.config['user_z_type'] == 'cont':
             # KL loss from N(0, 1)
-            kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
+            usr_kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
         else:
             # KL loss between q_z and p_z
-            kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
+            usr_kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
         if self.config['system_z_type'] == 'cont':
-            kl_loss += self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
+            system_kl_loss = self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
-            kl_loss += self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
+            system_kl_loss = self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
-        min_epochs = 45
+        min_epochs = 75
         final_kl_term = 1
         increase_start_epoch = 10
-        # step = np.exp(np.log(final_kl_term / self.config['init_KL_term']) / min_epochs)
-        # lambda_kl = self.config['init_KL_term'] * step ** min(self.epoch_number, min_epochs)
-        step = (final_kl_term - self.config['init_KL_term']) / min_epochs
-        lambda_kl = self.config['init_KL_term'] +\
-                    step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
-        print(lambda_kl, kl_loss, kl_loss * lambda_kl)
-        loss = decoder_loss + lambda_i * total_bow_loss + kl_loss * lambda_kl
-        return loss, kl_loss
+        # exponential decrease
+        step = np.exp(np.log(final_kl_term / self.config['init_KL_term']) / min_epochs)
+        lambda_kl = self.config['init_KL_term'] *\
+                    step ** min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
+        # step = (final_kl_term - self.config['init_KL_term']) / min_epochs
+        # lambda_kl = self.config['init_KL_term'] +\
+        #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
+        kl_loss = (system_kl_loss + usr_kl_loss) / 2
+        loss = decoder_loss + lambda_i * total_bow_loss + lambda_kl * kl_loss
+        return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
     def training_step(self, train_batch, batch_idx):
-        loss, kl_loss = self._step(train_batch)
-        logs = {'train_loss': loss, 'train_kl_loss': kl_loss}
+        loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss = self._step(train_batch)
+        logs = {'train_total_loss': loss,
+                'train_user_kl_loss': usr_kl_loss,
+                'train_user_decoder_loss': usr_decoder_loss,
+                'train_system_kl_loss': system_kl_loss,
+                'train_system_decoder_loss': system_decoder_loss,
+                'train_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
+                'train_kl_loss': (usr_kl_loss + system_kl_loss) / 2
+                }
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, val_batch, batch_idx):
-        loss, kl_loiss = self._step(val_batch)
+        loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss= self._step(val_batch)
         logs = {'val_loss': loss}
         return {'val_loss': loss, 'log': logs}
 
