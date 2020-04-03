@@ -23,13 +23,27 @@ class VAECell(torch.nn.Module):
         self.user_z_nets = torch.nn.ModuleList([ZNet(config) for _ in range(config['number_z_vectors'])])
         self.system_z_nets = torch.nn.ModuleList([ZNet(config) for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
-                                   config['posterior_ff_sizes2'][-1] +
+                                   # config['posterior_ff_sizes2'][-1] +
+                                   config['input_encoder_hidden_size'] *
+                                    (1 + int(config['bidirectional_encoder'])) +
                                    config['vrnn_hidden_size'],
                                    config['decoder_hidden_size'],
                                    config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
+        self.nlu_dec = RNNDecoder(embeddings,
+                                  # config['posterior_ff_sizes2'][-1] +
+                                  config['input_encoder_hidden_size'] *
+                                  (1 + int(config['bidirectional_encoder'])) +
+                                  config['vrnn_hidden_size'],
+                                  config['decoder_hidden_size'],
+                                  config['teacher_forcing_prob'],
+                                  drop_prob=config['drop_prob'])
+
         self.system_dec = RNNDecoder(embeddings,
-                                     config['posterior_ff_sizes2'][-1] * 2 +
+                                     # config['posterior_ff_sizes2'][-1] * 2 +
+                                     config['posterior_ff_sizes2'][-1] +
+                                     config['input_encoder_hidden_size'] *
+                                      (1 + int(config['bidirectional_encoder'])) +
                                      config['vrnn_hidden_size'],
                                      config['decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
@@ -47,9 +61,10 @@ class VAECell(torch.nn.Module):
     #     todo: activation f?
 
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
-                  z_nets, decoder, z_previous, prev_z_posterior_projection=None):
+                  z_nets, decoders, z_previous, prev_z_posterior_projection=None):
+        # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
         dials = self.embeddings(dials).transpose(1, 0)
-        dials_packed = pack_padded_sequence(dials, lens, enforce_sorted=False)
+        dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
         encoder_hidden = (encoder_init_state[0], encoder_init_state[1])
         encoder_outs, last_encoder_hidden = self.embedding_encoder(dials_packed, encoder_hidden)
         # concat fw+bw
@@ -65,18 +80,24 @@ class VAECell(torch.nn.Module):
 
         if prev_z_posterior_projection is not None:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], z_posterior_projection, prev_z_posterior_projection], dim=1)
+                # [previous_vrnn_hidden[0], z_posterior_projection, prev_z_posterior_projection], dim=1)
+                [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], z_posterior_projection], dim=1)
-        outputs, last_decoder_hidden, decoded_outputs =\
-            decoder(dials, decoder_init_hidden, torch.max(lens))
+                # [previous_vrnn_hidden[0], z_posterior_projection], dim=1)
+                [previous_vrnn_hidden[0], last_hidden], dim=1)
+        all_decoded_outputs = []
+        for i, decoder in enumerate(decoders):
+            outputs, last_decoder_hidden, decoded_outputs =\
+                decoder(dials, decoder_init_hidden, torch.max(lens[i]))
+            all_decoded_outputs.append(decoded_outputs)
+
         if self.config['with_bow_loss']:
             bow_logits = self.bow_projection(decoder_init_hidden)
         else:
             bow_logits = None
 
-        return TurnOutput(decoded_outputs=decoded_outputs,
+        return TurnOutput(decoded_outputs=all_decoded_outputs,
                           q_z=q_z,
                           p_z=p_z,
                           z_samples=z_samples,
@@ -86,7 +107,7 @@ class VAECell(torch.nn.Module):
                           last_encoder_hidden=last_hidden)
 
     def forward(self,
-                user_dials, user_lens,
+                user_dials, user_lens, nlu_lens,
                 system_dials, system_lens,
                 previous_vrnn_hidden, z_previous):
         # encode user & system utterances
@@ -95,19 +116,19 @@ class VAECell(torch.nn.Module):
                                           user_dials.shape[1],
                                           self.config['input_encoder_hidden_size']))
 
-        user_turn_output = self._z_module(user_dials,
-                                          user_lens,
+        user_turn_output = self._z_module(user_dials ,
+                                          [user_lens, nlu_lens],
                                           encoder_init_state,
                                           previous_vrnn_hidden,
                                           self.user_z_nets,
-                                          self.user_dec,
+                                          [self.user_dec, self.nlu_dec],
                                           z_previous)
         system_turn_output = self._z_module(system_dials,
-                                            system_lens,
+                                            [system_lens],
                                             encoder_init_state,
                                             previous_vrnn_hidden,
                                             self.system_z_nets,
-                                            self.system_dec,
+                                            [self.system_dec],
                                             z_previous,
                                             prev_z_posterior_projection=user_turn_output.z_posterior_projection)
 

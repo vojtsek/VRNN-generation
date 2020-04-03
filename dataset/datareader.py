@@ -5,6 +5,7 @@ import numpy
 
 from ..utils import tokenize
 
+
 class DataReader:
 
     def __init__(self, data=None, reader=None, saved_dialogues=None, delexicalizer=None, train=.8, valid=.1):
@@ -47,6 +48,7 @@ class DataReader:
             for t in d.turns:
                 self.all_words.update(t.user)
                 self.all_words.update(t.system)
+                self.all_words.update([s.val for s in t.usr_slu])
             self.max_dial_len = max(self.max_dial_len, len(d.turns))
             self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
         self.length = len(self._dialogues)
@@ -113,31 +115,43 @@ class Dialogue:
 
 class Turn:
 
-    def __init__(self):
+    def __init__(self, delexicalizer):
         self.user = None
         self.system = None
         self.usr_slu = None
+        self.state = None
         self.sys_slu = None
         self.parse = None
         self.intent = None
+        self.delexicalizer = delexicalizer
     
-    def add_user(self, utt, delexicalizer=None):
-        if delexicalizer is not None:
-            utt = delexicalizer.delex_utterance(utt)
+    def add_user(self, utt):
+        if self.delexicalizer is not None:
+            utt = self.delexicalizer.delex_utterance(utt)
         self.user = tokenize(utt)
 
-    def add_system(self, utt, delexicalizer=None):
-        utt = delexicalizer.delex_utterance(utt)
+    def add_system(self, utt):
+        if self.delexicalizer is not None:
+            utt = self.delexicalizer.delex_utterance(utt)
         self.system = tokenize(utt)
 
     def add_usr_slu(self, usr_slu):
-        self.usr_slu = usr_slu
+        self.usr_slu = self._process_slu(usr_slu)
+
+    def add_state(self, state):
+        self.state = self._process_slu(state)
 
     def add_sys_slu(self, sys_slu):
         self.sys_slu = sys_slu
 
     def add_intent(self, intent):
         self.intent = intent
+
+    def _process_slu(self, slu):
+        if self.delexicalizer is not None:
+            for s in slu:
+                s.val = self.delexicalizer.delex_utterance(s.val)
+        return slu
 
 
 class Slot:
@@ -157,12 +171,19 @@ class CamRestReader:
         for dial in data:
             dialogue = Dialogue()
             turns = dial['dial']
+            last_state = {}
             for t in turns:
-                turn = Turn()
-                turn.add_user(t['usr']['transcript'], delexicalizer)
-                turn.add_system(t['sys']['sent'], delexicalizer)
-                slu = self.parse_slu(t['usr']['slu'])
+                turn = Turn(delexicalizer)
+                turn.add_user(t['usr']['transcript'])
+                turn.add_system(t['sys']['sent'])
+                state = self.parse_slu(t['usr']['slu'])
+                slu = []
+                for s in state:
+                    if s.name not in last_state or last_state[s.name] != s.val:
+                        slu.append(s)
                 turn.add_usr_slu(slu)
+                turn.add_state(state)
+                last_state = state
                 intent_counter = Counter()
                 for slot in slu:
                     intent_counter[slot.intent] += 1

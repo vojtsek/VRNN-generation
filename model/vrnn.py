@@ -33,7 +33,6 @@ class VRNN(pl.LightningModule):
             config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
-        print(embeddings.matrix.shape)
         self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
         self.vae_cell = VAECell(self.embeddings_matrix, self.vrnn_cell, self.config)
         self.epoch_number = 0
@@ -41,10 +40,12 @@ class VRNN(pl.LightningModule):
         self.alpha = config['alpha_coeff_step']
         self.lmbd = config['default_lambda_loss']
 
-    def forward(self, user_dials, system_dials, user_lens, system_lens, dial_lens):
+    def forward(self, user_dials, system_dials, nlu_dials, user_lens, system_lens, nlu_lens, dial_lens):
         batch_sort_perm = reversed(np.argsort(dial_lens))
         user_dials = user_dials[batch_sort_perm].transpose(1, 0)
         user_lens = user_lens[batch_sort_perm].transpose(1, 0)
+        nlu_dials = nlu_dials[batch_sort_perm].transpose(1, 0)
+        nlu_lens = nlu_lens[batch_sort_perm].transpose(1, 0)
         system_dials = system_dials[batch_sort_perm].transpose(1, 0)
         system_lens = system_lens[batch_sort_perm].transpose(1, 0)
         dial_lens = dial_lens[batch_sort_perm]
@@ -53,6 +54,11 @@ class VRNN(pl.LightningModule):
             pack_padded_sequence(user_dials, dial_lens, enforce_sorted=False)
         user_lens_data, _, __, ___ =\
             pack_padded_sequence(user_lens, dial_lens, enforce_sorted=False)
+        nlu_dials_data, batch_sizes, sorted_indices, unsorted_indices =\
+            pack_padded_sequence(nlu_dials, dial_lens, enforce_sorted=False)
+        nlu_lens_data, _, __, ___ =\
+            pack_padded_sequence(nlu_lens, dial_lens, enforce_sorted=False)
+
         system_dials_data, x, y, z = \
             pack_padded_sequence(system_dials, dial_lens, enforce_sorted=False)
         system_lens_data, _, __, ___ = \
@@ -67,7 +73,7 @@ class VRNN(pl.LightningModule):
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
         z_latent = initial_z
-        user_outputs, system_outputs = [], []
+        user_outputs, system_outputs, nlu_outputs = [], [], []
         user_q_zs, user_p_zs, z_samples = [], [], []
         system_q_zs, system_p_zs = [], []
         z_samples_matrix = []
@@ -75,13 +81,15 @@ class VRNN(pl.LightningModule):
         for bs in batch_sizes:
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
                                        user_lens_data[offset:offset+bs],
+                                       nlu_lens_data[offset:offset+bs],
                                        system_dials_data[offset:offset+bs],
                                        system_lens_data[offset:offset+bs],
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        z_latent[:bs])
             offset += bs
-            user_outputs.append(vae_output.user_turn_output.decoded_outputs)
-            system_outputs.append(vae_output.system_turn_output.decoded_outputs)
+            user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
+            nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
+            system_outputs.append(vae_output.system_turn_output.decoded_outputs[0])
             user_q_zs.extend(vae_output.user_turn_output.q_z)
             z_samples_matrix.extend(vae_output.user_turn_output.z_samples_lst)
             user_p_zs.extend(vae_output.user_turn_output.p_z)
@@ -104,6 +112,9 @@ class VRNN(pl.LightningModule):
                               system_dials=_pad_packed(system_dials_data),
                               system_outputs=system_outputs,
                               system_lens=_pad_packed(system_lens_data),
+                              nlu_dials=_pad_packed(nlu_dials_data),
+                              nlu_outputs=nlu_outputs,
+                              nlu_lens=_pad_packed(nlu_lens_data),
                               user_q_zs=_pad_packed(user_q_zs),
                               user_p_zs=_pad_packed(user_p_zs),
                               system_q_zs=_pad_packed(system_q_zs),
@@ -180,7 +191,7 @@ class VRNN(pl.LightningModule):
         return kl
 
     def _step(self, batch):
-        user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        user_dials, system_dials, nlu_dials, user_lens, system_lens, nlu_lens, dial_lens = batch
         step_output = self.forward(*batch)
         total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
                                                                 step_output.user_dials,
@@ -188,6 +199,10 @@ class VRNN(pl.LightningModule):
         total_system_decoder_loss = self._compute_decoder_ce_loss(step_output.system_outputs,
                                                                   step_output.system_dials,
                                                                   step_output.system_lens)
+
+        total_nlu_decoder_loss = self._compute_decoder_ce_loss(step_output.nlu_outputs,
+                                                               step_output.nlu_dials,
+                                                               step_output.nlu_lens)
         if self.config['with_bow_loss']:
             total_bow_loss = self._compute_bow_loss(step_output.bow_logits,
                                                     step_output.user_outputs,
@@ -196,7 +211,7 @@ class VRNN(pl.LightningModule):
         else:
             total_bow_loss = 0
 
-        decoder_loss = (total_system_decoder_loss + total_user_decoder_loss) / 2
+        decoder_loss = (total_system_decoder_loss + total_user_decoder_loss + total_nlu_decoder_loss) / 3
         if self.config['z_type'] == 'cont':
             # KL loss from N(0, 1)
             kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
@@ -242,22 +257,33 @@ class VRNN(pl.LightningModule):
 
         all_user_predictions, all_user_gt = [], []
         all_system_predictions, all_system_gt = [], []
+        all_nlu_predictions, all_nlu_gt = [], []
         self._post_process_forwarded_batch(step_output.user_outputs,
                                            step_output.user_dials,
                                            all_user_predictions,
                                            all_user_gt,
                                            inv_vocab)
+
+        self._post_process_forwarded_batch(step_output.nlu_outputs,
+                                           step_output.nlu_dials,
+                                           all_nlu_predictions,
+                                           all_nlu_gt,
+                                           inv_vocab)
+
         self._post_process_forwarded_batch(step_output.system_outputs,
                                            step_output.system_dials,
                                            all_system_predictions,
                                            all_system_gt,
                                            inv_vocab)
+
         all_samples = torch.argmax(step_output.z_samples, dim=2).numpy()
         all_samples_matrix = torch.argmax(step_output.z_samples_matrix, dim=2).numpy()
         return PredictedOuputs(all_user_predictions,
                                all_user_gt,
                                all_system_predictions,
                                all_system_gt,
+                               all_nlu_predictions,
+                               all_nlu_gt,
                                all_samples,
                                all_samples_matrix)
 
@@ -300,6 +326,9 @@ class VRNNStepOutput:
                  system_dials=None,
                  system_outputs=None,
                  system_lens=None,
+                 nlu_dials=None,
+                 nlu_outputs=None,
+                 nlu_lens=None,
                  user_q_zs=None,
                  user_p_zs=None,
                  system_q_zs=None,
@@ -313,6 +342,9 @@ class VRNNStepOutput:
         self.system_dials = system_dials
         self.system_outputs = system_outputs
         self.system_lens = system_lens
+        self.nlu_dials = nlu_dials
+        self.nlu_outputs = nlu_outputs
+        self.nlu_lens = nlu_lens
         self.user_q_zs = user_q_zs
         self.user_p_zs = user_p_zs
         self.system_q_zs = system_q_zs
@@ -328,11 +360,15 @@ class PredictedOuputs:
                  all_user_gt=None,
                  all_system_predictions=None,
                  all_system_gt=None,
+                 all_nlu_predictions=None,
+                 all_nlu_gt=None,
                  all_z_samples=None,
                  all_z_samples_matrix=None):
         self.all_user_predictions = all_user_predictions
         self.all_user_gt = all_user_gt
         self.all_system_predictions = all_system_predictions
+        self.all_nlu_predictions = all_nlu_predictions
+        self.all_nlu_gt = all_nlu_gt
         self.all_system_gt = all_system_gt
         self.all_z_samples = all_z_samples
         self.all_z_samples_matrix = all_z_samples_matrix

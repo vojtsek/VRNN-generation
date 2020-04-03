@@ -33,28 +33,36 @@ class WordToInt(object):
         for t in sample.turns:
             t.user = [self.embeddings.w2id[tk] for tk in t.user + [Embeddings.EOS]]
             t.system = [self.embeddings.w2id[tk] for tk in t.system + [Embeddings.EOS]]
+            t.usr_slu = [self.embeddings.w2id[s.val] for s in t.usr_slu] + [self.embeddings.w2id[Embeddings.EOS]]
         return sample
 
 
 class Padding(object):
 
-    def __init__(self, pad_token: int, max_dial_len: int, max_turn_len: int):
+    def __init__(self, pad_token: int, max_dial_len: int, max_turn_len: int, max_slu_len: int = None):
         self.max_dial_len = max_dial_len
         self.max_turn_len = max_turn_len
+        self.max_slu_len = max_slu_len if max_slu_len is not None else max_turn_len
         self.pad_token = pad_token
 
     def __call__(self, sample):
         user_turns = [t.user for t in sample.turns]
         system_turns = [t.system for t in sample.turns]
+        nlu_turns = [t.usr_slu for t in sample.turns]
         user_padded_dial, user_turn_lens = pad_dial(
             user_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
         system_padded_dial, system_turn_lens = pad_dial(
             system_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
+        nlu_padded_dial, nlu_turn_lens = pad_dial(
+            nlu_turns, self.max_dial_len, self.max_slu_len, self.pad_token)
+
         return {
             'user_dials': user_padded_dial,
             'system_dials': system_padded_dial,
+            'nlu_dials': nlu_padded_dial,
             'user_turn_lens': user_turn_lens,
             'system_turn_lens': system_turn_lens,
+            'nlu_turn_lens': nlu_turn_lens,
             'dial_len': np.array(len(sample.turns))
         }
 
@@ -62,15 +70,10 @@ class Padding(object):
 class ToTensor(object):
 
     def __call__(self, sample):
-        # return {
-        #     'user_dials': torch.from_numpy(sample['user_dials']),
-        #     'system_dials': torch.from_numpy(sample['system_dials']),
-        #     'user_turn_lens': torch.from_numpy(sample['user_turn_lens']),
-        #     'system_turn_lens': torch.from_numpy(sample['system_turn_lens']),
-        #     'dial_len': torch.from_numpy(sample['dial_len'])
-        # }
         return (torch.from_numpy(sample['user_dials']),
                 torch.from_numpy(sample['system_dials']),
+                torch.from_numpy(sample['nlu_dials']),
                 torch.from_numpy(sample['user_turn_lens']),
                 torch.from_numpy(sample['system_turn_lens']),
+                torch.from_numpy(sample['nlu_turn_lens']),
                 torch.from_numpy(sample['dial_len']))

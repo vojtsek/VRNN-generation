@@ -65,8 +65,8 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
         trainer = pl.Trainer(
-            min_epochs=5,
-            max_epochs=15,
+            min_epochs=35,
+            max_epochs=80,
             callbacks=callbacks,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
@@ -82,6 +82,8 @@ def main(flags):
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \
             open(os.path.join(output_dir, 'user_out.txt'), 'wt') as user_fd, \
             open(os.path.join(output_dir, 'user_ground_truth.txt'), 'wt') as user_gt_fd, \
+            open(os.path.join(output_dir, 'nlu_out.txt'), 'wt') as nlu_fd, \
+            open(os.path.join(output_dir, 'nlu_ground_truth.txt'), 'wt') as nlu_gt_fd, \
             open(os.path.join(output_dir, 'z_posterior.txt'), 'wt') as z_post_fd, \
             open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd:
 
@@ -94,9 +96,11 @@ def main(flags):
             for i in range(len(predictions.all_user_predictions)):
                 print(f'\tTurn {i+1}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_nlu_predictions[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_system_predictions[i])}', file=all_fd)
                 print(f'\tORIG:', file=all_fd)
                 print(f'\t{" ".join(predictions.all_user_gt[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_nlu_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_system_gt[i])}', file=all_fd)
                 # print(f'\tZ: {all_z_samples[i]}', file=all_fd)
                 print(f'\tZ: {" ".join([str(z) for z in predictions.all_z_samples_matrix[i][0]])}', file=all_fd)
@@ -106,6 +110,8 @@ def main(flags):
                 print(" ".join(predictions.all_system_predictions[i]), file=system_fd)
                 print(" ".join(predictions.all_user_gt[i]), file=user_gt_fd)
                 print(" ".join(predictions.all_system_gt[i]), file=system_gt_fd)
+                print(" ".join(predictions.all_nlu_predictions[i]), file=nlu_fd)
+                print(" ".join(predictions.all_nlu_gt[i]), file=nlu_gt_fd)
                 print(" ".join([str(z) for z in predictions.all_z_samples_matrix[i][0]]), file=z_post_fd)
 
             print('', file=user_fd)
