@@ -10,6 +10,7 @@ from torch.utils.data import DataLoader as TorchDataLoader
 import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import EarlyStopping
+from pytorch_lightning.logging import TensorBoardLogger
 
 from .dataset import DataReader, CamRestReader, MultiWOZReader,\
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
@@ -48,7 +49,8 @@ def main(flags):
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
-                                                data_reader.max_turn_len + 1),  # +1 for <EOS>
+                                                data_reader.max_turn_len + 1,
+                                                data_reader.max_slu_len + 1),  # +1 for <EOS>
                                         ToTensor()])
     train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)
     valid_dataset = Dataset(data_reader.valid_set, transform=composed_transforms)
@@ -64,10 +66,12 @@ def main(flags):
     else:
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
         callbacks = [EpochEndCb()]
+        logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')
         trainer = pl.Trainer(
-            min_epochs=35,
+            min_epochs=55,
             max_epochs=80,
             callbacks=callbacks,
+            logger=logger,
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
             early_stop_callback=EarlyStopping(patience=3),

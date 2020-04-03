@@ -29,7 +29,7 @@ class VRNN(pl.LightningModule):
         # hidden is configured
         self.vrnn_cell = torch.nn.LSTMCell(
             # both input (possibly bidirectional) + both post logits
-            config['posterior_ff_sizes2'][-1] * 2 +
+            config['z_logits_dim'] * 2 +
             config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
@@ -212,27 +212,37 @@ class VRNN(pl.LightningModule):
             total_bow_loss = 0
 
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss + total_nlu_decoder_loss) / 3
-        if self.config['z_type'] == 'cont':
+        if self.config['user_z_type'] == 'cont':
             # KL loss from N(0, 1)
             kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
-            kl_loss += self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
             # KL loss between q_z and p_z
             kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
+        if self.config['system_z_type'] == 'cont':
+            kl_loss += self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
+        else:
             kl_loss += self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
-        kl_loss = 0
-        loss = decoder_loss + lambda_i * total_bow_loss + kl_loss
-        return loss
+        min_epochs = 45
+        final_kl_term = 1
+        increase_start_epoch = 10
+        # step = np.exp(np.log(final_kl_term / self.config['init_KL_term']) / min_epochs)
+        # lambda_kl = self.config['init_KL_term'] * step ** min(self.epoch_number, min_epochs)
+        step = (final_kl_term - self.config['init_KL_term']) / min_epochs
+        lambda_kl = self.config['init_KL_term'] +\
+                    step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
+        print(lambda_kl, kl_loss, kl_loss * lambda_kl)
+        loss = decoder_loss + lambda_i * total_bow_loss + kl_loss * lambda_kl
+        return loss, kl_loss
 
     def training_step(self, train_batch, batch_idx):
-        loss = self._step(train_batch)
-        logs = {'train_loss': loss}
+        loss, kl_loss = self._step(train_batch)
+        logs = {'train_loss': loss, 'train_kl_loss': kl_loss}
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, val_batch, batch_idx):
-        loss = self._step(val_batch)
+        loss, kl_loiss = self._step(val_batch)
         logs = {'val_loss': loss}
         return {'val_loss': loss, 'log': logs}
 

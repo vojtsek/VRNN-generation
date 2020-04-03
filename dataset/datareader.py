@@ -12,6 +12,7 @@ class DataReader:
         self._dialogues = []
         self.max_dial_len = 0
         self.max_turn_len = 0
+        self.max_slu_len = 0
         self.delexicalizer = delexicalizer
         self.all_words = Counter()
         if saved_dialogues is not None:
@@ -51,6 +52,7 @@ class DataReader:
                 self.all_words.update([s.val for s in t.usr_slu])
             self.max_dial_len = max(self.max_dial_len, len(d.turns))
             self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
+            self.max_slu_len = max(self.max_slu_len, max([len(t.usr_slu) for t in d.turns]))
         self.length = len(self._dialogues)
 
     def apply_to_dialogues(self, fun):
@@ -181,9 +183,9 @@ class CamRestReader:
                 for s in state:
                     if s.name not in last_state or last_state[s.name] != s.val:
                         slu.append(s)
+                    last_state[s.name] = s.val
                 turn.add_usr_slu(slu)
                 turn.add_state(state)
-                last_state = state
                 intent_counter = Counter()
                 for slot in slu:
                     intent_counter[slot.intent] += 1

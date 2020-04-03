@@ -14,16 +14,18 @@ teacher_forcing_prob: 0.5
 number_z_vectors: 1
 with_bow_loss: false
 k_loss_coeff: 0.1
+init_KL_term: 0.001
 alpha_coeff_step: 0.5
 default_lambda_loss: 1.0
 with_BPR: false
-z_type: 'gumbel' # cont| gumbel;
+user_z_type: 'cont' # cont| gumbel;
+system_z_type: 'cont'
 # layer sizes
 input_encoder_hidden_size: 150
 decoder_hidden_size: 300
 vrnn_hidden_size: 200
 posterior_ff_sizes1:
-  - 400
+  - 200
 #  - 200
 posterior_ff_sizes2:
 #  - 200
