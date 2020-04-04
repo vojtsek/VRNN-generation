@@ -19,10 +19,11 @@ class VAECell(torch.nn.Module):
                                                config['input_encoder_hidden_size'],
                                                bidirectional=config['bidirectional_encoder'])
 
-        self.user_z_nets = torch.nn.ModuleList([ZNet(config, config['user_z_type']) for _ in range(config['number_z_vectors'])])
-        self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type']) for _ in range(config['number_z_vectors'])])
+        self.user_z_nets = torch.nn.ModuleList([ZNet(config, config['user_z_type'], config['user_z_logits_dim'])])
+        self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type'], config['system_z_logits_dim'])
+                                                  for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
-                                   config['z_logits_dim'] +
+                                   config['user_z_logits_dim'] +
                                    # config['input_encoder_hidden_size'] *
                                    #  (1 + int(config['bidirectional_encoder'])) +
                                    config['vrnn_hidden_size'],
@@ -30,7 +31,7 @@ class VAECell(torch.nn.Module):
                                    config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
         self.nlu_dec = RNNDecoder(embeddings,
-                                  config['z_logits_dim'] +
+                                  config['user_z_logits_dim'] +
                                   # config['input_encoder_hidden_size'] *
                                   # (1 + int(config['bidirectional_encoder'])) +
                                   config['vrnn_hidden_size'],
@@ -39,23 +40,20 @@ class VAECell(torch.nn.Module):
                                   drop_prob=config['drop_prob'])
 
         self.system_dec = RNNDecoder(embeddings,
-                                     config['z_logits_dim'] * 2 +
-                                     # config['z_logits_dim'] +
+                                     config['user_z_logits_dim']  +
+                                     config['system_z_logits_dim'] +
                                      # config['input_encoder_hidden_size'] *
                                      # (1 + int(config['bidirectional_encoder'])) +
                                      config['vrnn_hidden_size'],
                                      config['decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
                                      config['drop_prob'])
-        self.bow_projection = FFNet(config['z_logits_dim'] + config['vrnn_hidden_size'],
+        self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[None, torch.relu],
                                     # activations=None,
                                     drop_prob=config['drop_prob']
                                     )
-
-        self.state_cell = torch.nn.LSTMCell(config['z_logits_dim'] + config['input_encoder_hidden_size'],
-                                            config['vrnn_hidden_size'])
 
     #     todo: activation f?
 
@@ -111,7 +109,7 @@ class VAECell(torch.nn.Module):
     def forward(self,
                 user_dials, user_lens, nlu_lens,
                 system_dials, system_lens,
-                previous_vrnn_hidden, z_previous):
+                previous_vrnn_hidden, user_z_previous, system_z_previous):
         # encode user & system utterances
         encoder_init_state = zero_hidden((2,
                                           1 + int(self.config['bidirectional_encoder']),
@@ -124,22 +122,19 @@ class VAECell(torch.nn.Module):
                                           previous_vrnn_hidden,
                                           self.user_z_nets,
                                           [self.user_dec, self.nlu_dec],
-                                          z_previous)
+                                          user_z_previous)
         system_turn_output = self._z_module(system_dials,
                                             [system_lens],
                                             encoder_init_state,
                                             previous_vrnn_hidden,
                                             self.system_z_nets,
                                             [self.system_dec],
-                                            z_previous,
+                                            system_z_previous,
                                             prev_z_posterior_projection=user_turn_output.z_posterior_projection,
                                             use_prior_eval=True)
 
-
-        z_posterior_projection = torch.cat([user_turn_output.z_posterior_projection,
-                                            system_turn_output.z_posterior_projection], dim=1)
-        encoded_inputs = torch.cat([user_turn_output.last_encoder_hidden,
-                                    system_turn_output.last_encoder_hidden], dim=1)
+        z_posterior_projection = system_turn_output.z_posterior_projection
+        encoded_inputs = user_turn_output.last_encoder_hidden
         vrnn_input = torch.cat([z_posterior_projection, encoded_inputs], dim=1)
         next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 

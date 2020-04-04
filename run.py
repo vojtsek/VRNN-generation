@@ -30,7 +30,7 @@ def main(flags):
             reader = CamRestReader()
         elif config['domain'] == 'woz-hotel':
             reader = MultiWOZReader(['hotel'])
-        data_reader = DataReader(data=data, reader=reader, delexicalizer=delexicalizer)
+        data_reader = DataReader(data=data, reader=reader, delexicalizer=None)
     else:
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 
@@ -45,7 +45,7 @@ def main(flags):
     embeddings = Embeddings(config['embedding_fn'],
                             # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=[w for w, _ in data_reader.all_words.most_common(5000)])
-    embeddings.add_tokens_rnd(delexicalizer.all_tags)
+    # embeddings.add_tokens_rnd(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,

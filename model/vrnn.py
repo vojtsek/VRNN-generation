@@ -28,9 +28,9 @@ class VRNN(pl.LightningModule):
         # input is 'projected z sample' concat user and system encoded
         # hidden is configured
         self.vrnn_cell = torch.nn.LSTMCell(
-            # both input (possibly bidirectional) + both post logits
-            config['z_logits_dim'] * 2 +
-            config['input_encoder_hidden_size'] * 2 * (1 + int(config['bidirectional_encoder'])),
+            # user input (possibly bidirectional) + system logits
+            config['system_z_logits_dim'] +
+            config['input_encoder_hidden_size'] * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
         self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
@@ -67,12 +67,11 @@ class VRNN(pl.LightningModule):
         initial_hidden = zero_hidden((2,
                                       self.config['batch_size'],
                                       self.config['vrnn_hidden_size']))
-        initial_z = zero_hidden((self.config['batch_size'],
-                                 self.config['z_logits_dim']))
 
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
-        z_latent = initial_z
+        user_z_previous = zero_hidden((self.config['batch_size'], self.config['user_z_logits_dim']))
+        system_z_previous = zero_hidden((self.config['batch_size'], self.config['system_z_logits_dim']))
         user_outputs, system_outputs, nlu_outputs = [], [], []
         user_q_zs, user_p_zs, z_samples = [], [], []
         system_q_zs, system_p_zs = [], []
@@ -85,8 +84,10 @@ class VRNN(pl.LightningModule):
                                        system_dials_data[offset:offset+bs],
                                        system_lens_data[offset:offset+bs],
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
-                                       z_latent[:bs])
+                                       user_z_previous[:bs], system_z_previous[:bs])
             offset += bs
+            user_z_previous = vae_output.user_turn_output.q_z if self.training else vae_output.user_turn_output.p_z
+            system_z_previous = vae_output.system_turn_output.q_z if self.training else vae_output.system_turn_output.p_z
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
             system_outputs.append(vae_output.system_turn_output.decoded_outputs[0])
@@ -97,7 +98,7 @@ class VRNN(pl.LightningModule):
             system_p_zs.extend(vae_output.system_turn_output.p_z)
             if self.config['with_bow_loss']:
                 bow_logits_list.extend(vae_output.user_turn_output.bow_logits)
-            z_samples.extend(vae_output.user_turn_output.z_samples)
+            z_samples.extend(vae_output.system_turn_output.z_samples)
 
         def _pad_packed(seq):
             if isinstance(seq, list):
