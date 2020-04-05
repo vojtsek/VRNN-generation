@@ -23,29 +23,29 @@ class VAECell(torch.nn.Module):
         self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type'], config['system_z_logits_dim'])
                                                   for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
-                                   config['user_z_logits_dim'] +
-                                   # config['input_encoder_hidden_size'] *
-                                   #  (1 + int(config['bidirectional_encoder'])) +
+                                   # config['user_z_logits_dim'] +
+                                   config['input_encoder_hidden_size'] *
+                                    (1 + int(config['bidirectional_encoder'])) +
                                    config['vrnn_hidden_size'],
-                                   config['decoder_hidden_size'],
+                                   config['user_decoder_hidden_size'],
                                    config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
         self.nlu_dec = RNNDecoder(embeddings,
-                                  config['user_z_logits_dim'] +
-                                  # config['input_encoder_hidden_size'] *
-                                  # (1 + int(config['bidirectional_encoder'])) +
+                                  # config['user_z_logits_dim'] +
+                                  config['input_encoder_hidden_size'] *
+                                  (1 + int(config['bidirectional_encoder'])) +
                                   config['vrnn_hidden_size'],
-                                  config['decoder_hidden_size'],
+                                  config['user_decoder_hidden_size'],
                                   config['teacher_forcing_prob'],
                                   drop_prob=config['drop_prob'])
 
         self.system_dec = RNNDecoder(embeddings,
-                                     config['user_z_logits_dim']  +
+                                     config['user_z_logits_dim'] +
                                      config['system_z_logits_dim'] +
                                      # config['input_encoder_hidden_size'] *
                                      # (1 + int(config['bidirectional_encoder'])) +
                                      config['vrnn_hidden_size'],
-                                     config['decoder_hidden_size'],
+                                     config['system_decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
                                      config['drop_prob'])
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
@@ -68,24 +68,26 @@ class VAECell(torch.nn.Module):
         last_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
         vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
         posterior_z_samples_lst, q_z_lst, prior_z_samples_lst, p_z_lst =\
-            zip(*[z_net(vrnn_hidden_cat_input, z_previous) for z_net in z_nets])
+            zip(*[z_net(vrnn_hidden_cat_input, z_previous, previous_vrnn_hidden[0]) for z_net in z_nets])
         if not use_prior_eval or self.training:
             sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
         else:
             sampled_latent = self.aggregate(torch.stack(prior_z_samples_lst))
-        q_z = self.aggregate(torch.stack(q_z_lst))
-        p_z = self.aggregate(torch.stack(p_z_lst))
+        q_z = torch.stack(q_z_lst)
+        p_z = torch.stack(p_z_lst)
         z_samples = self.aggregate(torch.stack(prior_z_samples_lst))
         prior_z_samples_lst = torch.stack(prior_z_samples_lst).transpose(1, 0).transpose(2, 1)
+        posterior_z_samples_lst = torch.stack(posterior_z_samples_lst).transpose(1, 0).transpose(2, 1)
 
         if prev_z_posterior_projection is not None:
             decoder_init_hidden = torch.cat(
                 [previous_vrnn_hidden[0], sampled_latent, prev_z_posterior_projection], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
+            # trick, this is actually the user dec branch
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], sampled_latent], dim=1)
-                # [previous_vrnn_hidden[0], last_hidden], dim=1)
+                # [previous_vrnn_hidden[0], sampled_latent], dim=1)
+                [previous_vrnn_hidden[0], last_hidden], dim=1)
         all_decoded_outputs = []
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
@@ -98,10 +100,11 @@ class VAECell(torch.nn.Module):
             bow_logits = None
 
         return TurnOutput(decoded_outputs=all_decoded_outputs,
-                          q_z=q_z,
-                          p_z=p_z,
+                          q_z=q_z.transpose(1, 0),
+                          p_z=p_z.transpose(1, 0),
                           z_samples=z_samples,
-                          z_samples_lst=prior_z_samples_lst,
+                          p_z_samples_lst=prior_z_samples_lst,
+                          q_z_samples_lst=posterior_z_samples_lst,
                           bow_logits=bow_logits,
                           z_posterior_projection=sampled_latent,
                           last_encoder_hidden=last_hidden)
@@ -161,7 +164,8 @@ class TurnOutput:
                  q_z=None,
                  p_z=None,
                  z_samples=None,
-                 z_samples_lst=None,
+                 p_z_samples_lst=None,
+                 q_z_samples_lst=None,
                  bow_logits=None,
                  z_posterior_projection=None,
                  last_encoder_hidden=None):
@@ -169,7 +173,8 @@ class TurnOutput:
         self.q_z = q_z
         self.p_z = p_z
         self.z_samples = z_samples
-        self.z_samples_lst = z_samples_lst
+        self.p_z_samples_lst = p_z_samples_lst
+        self.q_z_samples_lst = q_z_samples_lst
         self.bow_logits = bow_logits
         self.z_posterior_projection = z_posterior_projection
         self.last_encoder_hidden = last_encoder_hidden

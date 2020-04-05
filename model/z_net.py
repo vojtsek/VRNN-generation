@@ -28,13 +28,15 @@ class ZNet(torch.nn.Module):
                                     config['posterior_ff_sizes2'],
                                     drop_prob=config['drop_prob'])
 
-        self.prior_net = FFNet(z_logits_dim, config['prior_ff_sizes'], drop_prob=config['drop_prob'])
+        self.prior_net = FFNet(z_logits_dim + config['vrnn_hidden_size'],
+                               config['prior_ff_sizes'],
+                               drop_prob=config['drop_prob'])
         self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
 
-    def forward(self, x, z_previous):
+    def forward(self, x, z_previous, vrnn_hidden):
         # x = self.posterior_net1(x)
         z_posterior_logits = self.posterior_projection(x)
-        z_prior_logits = self.prior_net(z_previous)
+        z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))
         z_prior_logits = self.prior_projection(z_prior_logits)
         p_z = F.softmax(z_prior_logits, dim=-1)
 
@@ -53,4 +55,5 @@ class ZNet(torch.nn.Module):
 
         if self.z_type == 'cont':
             q_z = q_z_samples
+        # return q_z_samples, q_z, q_z_samples, q_z
         return q_z_samples, q_z, p_z_samples, p_z

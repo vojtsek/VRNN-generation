@@ -75,7 +75,7 @@ class VRNN(pl.LightningModule):
         user_outputs, system_outputs, nlu_outputs = [], [], []
         user_q_zs, user_p_zs, z_samples = [], [], []
         system_q_zs, system_p_zs = [], []
-        z_samples_matrix = []
+        p_z_samples_matrix, q_z_samples_matrix = [], []
         bow_logits_list = []
         for bs in batch_sizes:
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
@@ -86,13 +86,18 @@ class VRNN(pl.LightningModule):
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        user_z_previous[:bs], system_z_previous[:bs])
             offset += bs
-            user_z_previous = vae_output.user_turn_output.q_z if self.training else vae_output.user_turn_output.p_z
-            system_z_previous = vae_output.system_turn_output.q_z if self.training else vae_output.system_turn_output.p_z
+            user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0)
+                                                      if self.training else
+                                                      vae_output.user_turn_output.p_z.transpose(1, 0))
+            system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.q_z.transpose(1, 0)
+                                                        if self.training else
+                                                        vae_output.system_turn_output.p_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
             system_outputs.append(vae_output.system_turn_output.decoded_outputs[0])
             user_q_zs.extend(vae_output.user_turn_output.q_z)
-            z_samples_matrix.extend(vae_output.user_turn_output.z_samples_lst)
+            p_z_samples_matrix.extend(vae_output.system_turn_output.p_z_samples_lst)
+            q_z_samples_matrix.extend(vae_output.system_turn_output.q_z_samples_lst)
             user_p_zs.extend(vae_output.user_turn_output.p_z)
             system_q_zs.extend(vae_output.system_turn_output.q_z)
             system_p_zs.extend(vae_output.system_turn_output.p_z)
@@ -122,7 +127,8 @@ class VRNN(pl.LightningModule):
                               system_p_zs=_pad_packed(system_p_zs),
                               z_samples=_pad_packed(z_samples),
                               bow_logits=_pad_packed(bow_logits_list) if self.config['with_bow_loss'] else None,
-                              z_samples_matrix=_pad_packed(z_samples_matrix))
+                              p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
+                              q_z_samples_matrix=_pad_packed(q_z_samples_matrix))
 
     def _compute_decoder_ce_loss(self, outputs, reference, output_lens):
         total_loss = 0
@@ -169,10 +175,10 @@ class VRNN(pl.LightningModule):
         q_z, lens, sorted_indices, unsorted_indices = \
             pack_padded_sequence(q_zs, dial_lens, enforce_sorted=False)
 
-        mu = q_z[:, :int(q_z.shape[1] / 2)]
-        logvar = q_z[:, int(q_z.shape[1] / 2):]
-        total_kl_loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=1), dim=0)
-        return total_kl_loss
+        mu = q_z[..., :int(q_z.shape[-1] / 2)]
+        logvar = q_z[..., int(q_z.shape[-1] / 2):]
+        total_kl_loss = torch.mean(-0.5 * torch.sum(1 + logvar - mu ** 2 - logvar.exp(), dim=2), dim=0)
+        return torch.sum(total_kl_loss)
 
     def _compute_discrete_vae_kl_loss(self, q_zs, p_zs, dial_lens):
 
@@ -182,14 +188,23 @@ class VRNN(pl.LightningModule):
             pack_padded_sequence(p_zs, dial_lens, enforce_sorted=False)
 
         # todo: has to be regularized w.r.t. variable batch sizes
-        # if self.config['with_BPR']:
-        #     p_z = torch.mean(p_z, dim=0).unsqueeze(0)
-        #     q_z = torch.mean(q_z, dim=0).unsqueeze(0)
+        offset = 0
+        p_zs_norm, q_zs_norm = [], []
+
+        if self.config['with_bpr']:
+            for l in lens:
+                p_zs_norm.append(torch.mean(p_z[offset:offset+l], dim=0))
+                q_zs_norm.append(torch.mean(q_z[offset:offset+l], dim=0))
+                offset += l
+            q_z = torch.stack(q_zs_norm)
+            p_z = torch.stack(p_zs_norm)
+
         log_q_z = torch.log(q_z + 1e-20)
         log_p_z = torch.log(p_z + 1e-20)
         kl = (log_q_z - log_p_z) * q_z
+        # KL per each Z vector
         kl = torch.mean(torch.sum(kl, dim=-1), dim=0)
-        return kl
+        return torch.sum(kl)
 
     def _step(self, batch):
         user_dials, system_dials, nlu_dials, user_lens, system_lens, nlu_lens, dial_lens = batch
@@ -236,7 +251,7 @@ class VRNN(pl.LightningModule):
         # lambda_kl = self.config['init_KL_term'] +\
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
         kl_loss = (system_kl_loss + usr_kl_loss) / 2
-        loss = decoder_loss + lambda_i * total_bow_loss + lambda_kl * kl_loss
+        loss = decoder_loss + lambda_i * total_bow_loss + lambda_kl * usr_kl_loss + 10 * system_kl_loss
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
     def training_step(self, train_batch, batch_idx):
@@ -252,16 +267,31 @@ class VRNN(pl.LightningModule):
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, val_batch, batch_idx):
-        loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss= self._step(val_batch)
-        logs = {'val_loss': loss}
-        return {'val_loss': loss, 'log': logs}
+        loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss = self._step(val_batch)
+        logs = {'valid_total_loss': loss,
+                'valid_user_kl_loss': usr_kl_loss,
+                'valid_user_decoder_loss': usr_decoder_loss,
+                'valid_system_kl_loss': system_kl_loss,
+                'valid_system_decoder_loss': system_decoder_loss,
+                'valid_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
+                'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2
+                }
+        return {'val_loss': loss,
+                'valid_user_kl_loss': usr_kl_loss,
+                'valid_user_decoder_loss': usr_decoder_loss,
+                'valid_system_kl_loss': system_kl_loss,
+                'valid_system_decoder_loss': system_decoder_loss,
+                'valid_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
+                'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2,
+                'log': logs}
 
     def validation_end(self, outputs):
         # called at the end of the validation epoch
         # outputs is an array with what you returned in validation_step for each batch
         # outputs = [{'loss': batch_0_loss}, {'loss': batch_1_loss}, ..., {'loss': batch_n_loss}]
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        tensorboard_logs = {'val_loss': avg_loss}
+        tensorboard_logs = {k: torch.stack([x[k] for x in outputs]).mean()
+                            for k in outputs[0].keys() if k != 'log'}
         return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, ground_truths, inv_vocab):
@@ -297,7 +327,8 @@ class VRNN(pl.LightningModule):
                                            inv_vocab)
 
         all_samples = torch.argmax(step_output.z_samples, dim=2).numpy()
-        all_samples_matrix = torch.argmax(step_output.z_samples_matrix, dim=2).numpy()
+        all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).numpy()
+        all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).numpy()
         return PredictedOuputs(all_user_predictions,
                                all_user_gt,
                                all_system_predictions,
@@ -305,10 +336,14 @@ class VRNN(pl.LightningModule):
                                all_nlu_predictions,
                                all_nlu_gt,
                                all_samples,
-                               all_samples_matrix)
+                               all_p_samples_matrix,
+                               all_q_samples_matrix)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3)
+        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3,betas=(0.9, 0.999),
+                                     eps=1e-08, weight_decay=0, amsgrad=False)
+        self.lr_scheduler =\
+            torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=self.config['lr_decay_rate'])
         return optimizer
 
     def train_dataloader(self):
@@ -325,6 +360,7 @@ class EpochEndCb(pl.Callback):
 
     def on_epoch_end(self, trainer, model):
         model.epoch_number += 1
+        # model.lr_scheduler.step()
 
 
 def checkpoint_callback(filepath):
@@ -355,7 +391,8 @@ class VRNNStepOutput:
                  system_p_zs=None,
                  z_samples=None,
                  bow_logits=None,
-                 z_samples_matrix=None):
+                 p_z_samples_matrix=None,
+                 q_z_samples_matrix=None):
         self.user_dials = user_dials
         self.user_outputs = user_outputs
         self.user_lens = user_lens
@@ -371,7 +408,8 @@ class VRNNStepOutput:
         self.system_p_zs = system_p_zs
         self.z_samples = z_samples
         self.bow_logits = bow_logits
-        self.z_samples_matrix = z_samples_matrix
+        self.p_z_samples_matrix = p_z_samples_matrix
+        self.q_z_samples_matrix = q_z_samples_matrix
 
 
 class PredictedOuputs:
@@ -383,7 +421,9 @@ class PredictedOuputs:
                  all_nlu_predictions=None,
                  all_nlu_gt=None,
                  all_z_samples=None,
-                 all_z_samples_matrix=None):
+                 all_p_z_samples_matrix=None,
+                 all_q_z_samples_matrix=None
+                 ):
         self.all_user_predictions = all_user_predictions
         self.all_user_gt = all_user_gt
         self.all_system_predictions = all_system_predictions
@@ -391,4 +431,5 @@ class PredictedOuputs:
         self.all_nlu_gt = all_nlu_gt
         self.all_system_gt = all_system_gt
         self.all_z_samples = all_z_samples
-        self.all_z_samples_matrix = all_z_samples_matrix
+        self.all_p_z_samples_matrix = all_p_z_samples_matrix
+        self.all_q_z_samples_matrix = all_q_z_samples_matrix

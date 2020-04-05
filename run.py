@@ -106,8 +106,8 @@ def main(flags):
                 print(f'\t{" ".join(predictions.all_user_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_nlu_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_system_gt[i])}', file=all_fd)
-                # print(f'\tZ: {all_z_samples[i]}', file=all_fd)
-                print(f'\tZ: {" ".join([str(z) for z in predictions.all_z_samples_matrix[i][0]])}', file=all_fd)
+                print(f'\tprior Z: {" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]])}', file=all_fd)
+                print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
 
                 print(" ".join(predictions.all_user_predictions[i]), file=user_fd)
@@ -116,7 +116,7 @@ def main(flags):
                 print(" ".join(predictions.all_system_gt[i]), file=system_gt_fd)
                 print(" ".join(predictions.all_nlu_predictions[i]), file=nlu_fd)
                 print(" ".join(predictions.all_nlu_gt[i]), file=nlu_gt_fd)
-                print(" ".join([str(z) for z in predictions.all_z_samples_matrix[i][0]]), file=z_post_fd)
+                print(" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]]), file=z_post_fd)
 
             print('', file=user_fd)
             print('', file=system_fd)
