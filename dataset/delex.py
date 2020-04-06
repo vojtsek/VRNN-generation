@@ -19,8 +19,8 @@ class Delexicalizer:
 
     def delex_utterance(self, utt):
         utt = utt.lower()
-        if self.otgy is not None:
-            utt = self._replace_otgy(utt)
+        # if self.otgy is not None:
+        #     utt = self._replace_otgy(utt)
         if self.db is not None:
             utt = self._replace_db(utt)
         return utt

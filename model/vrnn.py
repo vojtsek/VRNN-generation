@@ -256,7 +256,7 @@ class VRNN(pl.LightningModule):
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
 
-    def training_step(self, train_batch, batch_idx, optimizer_idx):
+    def training_step(self, train_batch, batch_idx, optimizer_idx=0):
         loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss =\
             self._step(train_batch, optimizer_idx)
         logs = {'train_total_loss': loss,
@@ -359,7 +359,7 @@ class VRNN(pl.LightningModule):
 
         optimizer_network = torch.optim.Adam(supervised_parameters, lr=1e-3, betas=(0.9, 0.999),
                                              eps=1e-08, weight_decay=0, amsgrad=False)
-        optimizer_prior = torch.optim.SGD(prior_parameters, lr=5e-4)
+        optimizer_prior = torch.optim.SGD(prior_parameters, lr=1e-3)
         self.lr_scheduler =\
             torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
         return [optimizer_network, optimizer_prior]
@@ -387,7 +387,7 @@ class EpochEndCb(pl.Callback):
 
     def on_epoch_end(self, trainer, model):
         model.epoch_number += 1
-        # model.lr_scheduler.step()
+        model.lr_scheduler.step()
 
 
 def checkpoint_callback(filepath):

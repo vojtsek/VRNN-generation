@@ -63,7 +63,7 @@ def read_z_data(z_data_fd, dial_len=None):
             current_dial_cache = []
             continue
         line = line.split()
-        current_dial_cache.append([int(turn_idx), float(line[0]), float(line[0])])
+        current_dial_cache.append([int(turn_idx), float(line[0]), float(line[1])])
     return np.array(z_data)
 
 

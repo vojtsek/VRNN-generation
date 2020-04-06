@@ -30,7 +30,7 @@ def main(flags):
             reader = CamRestReader()
         elif config['domain'] == 'woz-hotel':
             reader = MultiWOZReader(['hotel'])
-        data_reader = DataReader(data=data, reader=reader, delexicalizer=None)
+        data_reader = DataReader(data=data, reader=reader, delexicalizer=delexicalizer)
     else:
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 
@@ -43,7 +43,7 @@ def main(flags):
     shutil.copy(flags.config, os.path.join(output_dir, 'conf.yaml'))
 
     embeddings = Embeddings(config['embedding_fn'],
-                            # out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
+                            out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=[w for w, _ in data_reader.all_words.most_common(5000)])
     # embeddings.add_tokens_rnd(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings),
@@ -80,7 +80,7 @@ def main(flags):
         trainer.fit(model)
 
     model.eval()
-    loader = TorchDataLoader(train_dataset, batch_size=1, shuffle=True)
+    loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, 'output_all.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \
