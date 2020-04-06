@@ -199,7 +199,7 @@ class VRNN(pl.LightningModule):
             p_z = torch.stack(p_zs_norm)
         log_q_z = torch.log(q_z + 1e-20)
         log_p_z = torch.log(p_z + 1e-20)
-        kl = (log_q_z - log_p_z) * q_z
+        kl = (log_p_z - log_q_z) * p_z
         # KL per each Z vector
         kl = torch.mean(torch.sum(kl, dim=-1), dim=0)
         return torch.sum(kl)
