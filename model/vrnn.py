@@ -96,9 +96,9 @@ class VRNN(pl.LightningModule):
             nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
             system_outputs.append(vae_output.system_turn_output.decoded_outputs[0])
             user_q_zs.extend(vae_output.user_turn_output.q_z)
+            user_p_zs.extend(vae_output.user_turn_output.p_z)
             p_z_samples_matrix.extend(vae_output.system_turn_output.p_z_samples_lst)
             q_z_samples_matrix.extend(vae_output.system_turn_output.q_z_samples_lst)
-            user_p_zs.extend(vae_output.user_turn_output.p_z)
             system_q_zs.extend(vae_output.system_turn_output.q_z)
             system_p_zs.extend(vae_output.system_turn_output.p_z)
             if self.config['with_bow_loss']:
@@ -190,7 +190,6 @@ class VRNN(pl.LightningModule):
         # todo: has to be regularized w.r.t. variable batch sizes
         offset = 0
         p_zs_norm, q_zs_norm = [], []
-
         if self.config['with_bpr']:
             for l in lens:
                 p_zs_norm.append(torch.mean(p_z[offset:offset+l], dim=0))
@@ -198,7 +197,6 @@ class VRNN(pl.LightningModule):
                 offset += l
             q_z = torch.stack(q_zs_norm)
             p_z = torch.stack(p_zs_norm)
-
         log_q_z = torch.log(q_z + 1e-20)
         log_p_z = torch.log(p_z + 1e-20)
         kl = (log_q_z - log_p_z) * q_z
@@ -206,7 +204,7 @@ class VRNN(pl.LightningModule):
         kl = torch.mean(torch.sum(kl, dim=-1), dim=0)
         return torch.sum(kl)
 
-    def _step(self, batch):
+    def _step(self, batch, optimizer_idx=0):
         user_dials, system_dials, nlu_dials, user_lens, system_lens, nlu_lens, dial_lens = batch
         step_output = self.forward(*batch)
         total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
@@ -251,11 +249,16 @@ class VRNN(pl.LightningModule):
         # lambda_kl = self.config['init_KL_term'] +\
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
         kl_loss = (system_kl_loss + usr_kl_loss) / 2
-        loss = decoder_loss + lambda_i * total_bow_loss + lambda_kl * usr_kl_loss + 10 * system_kl_loss
+        if optimizer_idx == 0:
+            loss = decoder_loss + lambda_i * total_bow_loss + lambda_kl * usr_kl_loss
+        else:
+            loss = system_kl_loss
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
-    def training_step(self, train_batch, batch_idx):
-        loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss = self._step(train_batch)
+
+    def training_step(self, train_batch, batch_idx, optimizer_idx):
+        loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss =\
+            self._step(train_batch, optimizer_idx)
         logs = {'train_total_loss': loss,
                 'train_user_kl_loss': usr_kl_loss,
                 'train_user_decoder_loss': usr_decoder_loss,
@@ -340,11 +343,35 @@ class VRNN(pl.LightningModule):
                                all_q_samples_matrix)
 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=1e-3,betas=(0.9, 0.999),
-                                     eps=1e-08, weight_decay=0, amsgrad=False)
+        prior_parameters = []
+        supervised_parameters = []
+        for z_net in self.vae_cell.system_z_nets:
+            prior_parameters.extend(list(z_net.prior_net.parameters()))
+            prior_parameters.extend(list(z_net.prior_projection.parameters()))
+
+        for p in self.parameters():
+            found = False
+            for p2 in prior_parameters:
+                if p.shape == p2.shape and torch.equal(p, p2):
+                    found = True
+            if not found:
+                supervised_parameters.append(p)
+
+        optimizer_network = torch.optim.Adam(supervised_parameters, lr=1e-3, betas=(0.9, 0.999),
+                                             eps=1e-08, weight_decay=0, amsgrad=False)
+        optimizer_prior = torch.optim.SGD(prior_parameters, lr=5e-4)
         self.lr_scheduler =\
-            torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer, gamma=self.config['lr_decay_rate'])
-        return optimizer
+            torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
+        return [optimizer_network, optimizer_prior]
+
+    def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
+        if optimizer_i == 0:
+            optimizer.step()
+            optimizer.zero_grad()
+
+        if optimizer_i == 1:
+            optimizer.step()
+            optimizer.zero_grad()
 
     def train_dataloader(self):
         return self._train_loader

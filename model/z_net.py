@@ -7,7 +7,7 @@ from ..utils import gumbel_softmax_sample, normal_sample
 
 class ZNet(torch.nn.Module):
 
-    def __init__(self, config, z_type, z_logits_dim):
+    def __init__(self, config, z_type, z_logits_dim, cond_z_logits_dim):
         super(ZNet, self).__init__()
         self.config = config
         self.z_logits_dim = z_logits_dim
@@ -28,7 +28,7 @@ class ZNet(torch.nn.Module):
                                     config['posterior_ff_sizes2'],
                                     drop_prob=config['drop_prob'])
 
-        self.prior_net = FFNet(z_logits_dim + config['vrnn_hidden_size'],
+        self.prior_net = FFNet(cond_z_logits_dim + config['vrnn_hidden_size'],
                                config['prior_ff_sizes'],
                                drop_prob=config['drop_prob'])
         self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
@@ -55,5 +55,7 @@ class ZNet(torch.nn.Module):
 
         if self.z_type == 'cont':
             q_z = q_z_samples
-        # return q_z_samples, q_z, q_z_samples, q_z
-        return q_z_samples, q_z, p_z_samples, p_z
+        if torch.rand(1) < .5:
+            return q_z_samples, q_z, q_z_samples, q_z
+        else:
+            return q_z_samples, q_z, p_z_samples, p_z

@@ -80,7 +80,7 @@ def main(flags):
         trainer.fit(model)
 
     model.eval()
-    loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
+    loader = TorchDataLoader(train_dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, 'output_all.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \
