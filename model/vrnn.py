@@ -181,25 +181,25 @@ class VRNN(pl.LightningModule):
         return torch.sum(total_kl_loss)
 
     def _compute_discrete_vae_kl_loss(self, q_zs, p_zs, dial_lens):
-
         q_z, lens, sorted_indices, unsorted_indices = \
-            pack_padded_sequence(q_zs, dial_lens, enforce_sorted=False)
+            pack_padded_sequence(q_zs, dial_lens, enforce_sorted=True)
         p_z, lens, sorted_indices, unsorted_indices = \
-            pack_padded_sequence(p_zs, dial_lens, enforce_sorted=False)
+            pack_padded_sequence(p_zs, dial_lens, enforce_sorted=True)
 
         # todo: has to be regularized w.r.t. variable batch sizes
         offset = 0
         p_zs_norm, q_zs_norm = [], []
         if self.config['with_bpr']:
             for l in lens:
-                p_zs_norm.append(torch.mean(p_z[offset:offset+l], dim=0))
+                p_norm = torch.mean(p_z[offset:offset + l], dim=0)
+                p_zs_norm.append(p_norm)
                 q_zs_norm.append(torch.mean(q_z[offset:offset+l], dim=0))
                 offset += l
             q_z = torch.stack(q_zs_norm)
             p_z = torch.stack(p_zs_norm)
         log_q_z = torch.log(q_z + 1e-20)
         log_p_z = torch.log(p_z + 1e-20)
-        kl = (log_p_z - log_q_z) * p_z
+        kl = (log_q_z - log_p_z) * q_z
         # KL per each Z vector
         kl = torch.mean(torch.sum(kl, dim=-1), dim=0)
         return torch.sum(kl)
@@ -226,6 +226,8 @@ class VRNN(pl.LightningModule):
             total_bow_loss = 0
 
         decoder_loss = (total_system_decoder_loss + total_user_decoder_loss + total_nlu_decoder_loss) / 3
+        batch_sort_perm = reversed(np.argsort(dial_lens))
+        dial_lens = dial_lens[batch_sort_perm]
         if self.config['user_z_type'] == 'cont':
             # KL loss from N(0, 1)
             usr_kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
@@ -235,7 +237,8 @@ class VRNN(pl.LightningModule):
         if self.config['system_z_type'] == 'cont':
             system_kl_loss = self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
-            system_kl_loss = self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
+            system_kl_loss =\
+                self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
         min_epochs = 75
@@ -250,11 +253,11 @@ class VRNN(pl.LightningModule):
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
         kl_loss = (system_kl_loss + usr_kl_loss) / 2
         if optimizer_idx == 0:
-            loss = decoder_loss + lambda_i * total_bow_loss + lambda_kl * usr_kl_loss
+            loss = decoder_loss + lambda_kl * usr_kl_loss
         else:
             loss = system_kl_loss
+        # loss = decoder_loss + lambda_kl * (usr_kl_loss + system_kl_loss)
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
-
 
     def training_step(self, train_batch, batch_idx, optimizer_idx=0):
         loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss =\
@@ -357,21 +360,28 @@ class VRNN(pl.LightningModule):
             if not found:
                 supervised_parameters.append(p)
 
+        # prior_parameters.extend(self.vae_cell.system_dec.parameters())
         optimizer_network = torch.optim.Adam(supervised_parameters, lr=1e-3, betas=(0.9, 0.999),
                                              eps=1e-08, weight_decay=0, amsgrad=False)
         optimizer_prior = torch.optim.SGD(prior_parameters, lr=1e-3)
         self.lr_scheduler =\
             torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
-        return [optimizer_network, optimizer_prior]
+        return [optimizer_network,]
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
-        if optimizer_i == 0:
-            optimizer.step()
-            optimizer.zero_grad()
+        # if self.epoch_number < 20:
+        #     if optimizer_i == 0:
+        #         optimizer.step()
+        #         optimizer.zero_grad()
+        #         return
 
-        if optimizer_i == 1:
+        if optimizer_i == 0 and (self.epoch_number <= self.config['begin_kl_opt_epoch'] or self.epoch_number % 10 == 0):
             optimizer.step()
             optimizer.zero_grad()
+        #
+        # if optimizer_i == 1 and self.epoch_number > self.config['begin_kl_opt_epoch']:
+        #     optimizer.step()
+        #     optimizer.zero_grad()
 
     def train_dataloader(self):
         return self._train_loader
@@ -387,7 +397,8 @@ class EpochEndCb(pl.Callback):
 
     def on_epoch_end(self, trainer, model):
         model.epoch_number += 1
-        model.lr_scheduler.step()
+        model.vae_cell.epoch_number += 1
+        # model.lr_scheduler.step()
 
 
 def checkpoint_callback(filepath):

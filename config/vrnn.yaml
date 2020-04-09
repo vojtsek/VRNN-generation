@@ -10,11 +10,12 @@ batch_size: 8
 drop_prob: 0.65
 lr_decay_rate: 0.98
 bidirectional_encoder: true
-gumbel_softmax_tmp: 5
+gumbel_softmax_tmp: 0.5
 teacher_forcing_prob: 0.5
 number_z_vectors: 2
 with_bpr: false
 with_bow_loss: false
+begin_kl_opt_epoch: 40
 
 # KL before start increasing
 init_KL_term: 0.001
@@ -34,7 +35,8 @@ posterior_ff_sizes2:
 #  - 200
   - 200
 prior_ff_sizes:
-  - 200
+  - 250
+  - 150
 bow_layer_size: 400
 # latent z config
 user_z_type: 'cont' # cont| gumbel;

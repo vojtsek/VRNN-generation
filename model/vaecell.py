@@ -11,6 +11,7 @@ class VAECell(torch.nn.Module):
     def __init__(self, embeddings, vrnn_cell, config):
         super(VAECell, self).__init__()
         self.config = config
+        self.epoch_number = 0
         self.embeddings = embeddings
         embedding_dim = embeddings.embedding_dim
         self.vrnn_cell = vrnn_cell
@@ -73,7 +74,8 @@ class VAECell(torch.nn.Module):
         vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
         posterior_z_samples_lst, q_z_lst, prior_z_samples_lst, p_z_lst =\
             zip(*[z_net(vrnn_hidden_cat_input, z_previous, previous_vrnn_hidden[0]) for z_net in z_nets])
-        if not use_prior_eval or self.training:
+        if not use_prior_eval or (self.training and
+                                  self.epoch_number < self.config['begin_kl_opt_epoch']):
             sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
         else:
             sampled_latent = self.aggregate(torch.stack(prior_z_samples_lst))

@@ -38,10 +38,10 @@ class ZNet(torch.nn.Module):
         z_posterior_logits = self.posterior_projection(x)
         z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))
         z_prior_logits = self.prior_projection(z_prior_logits)
-        p_z = F.softmax(z_prior_logits, dim=-1)
+        p_z = F.softmax(z_prior_logits / self.config['gumbel_softmax_tmp'], dim=-1)
 
         if self.z_type == 'gumbel':
-            q_z = F.softmax(z_posterior_logits, dim=-1)
+            q_z = F.softmax(z_posterior_logits / self.config['gumbel_softmax_tmp'], dim=-1)
             q_z_samples, q_z_samples_logits =\
                 gumbel_softmax_sample(z_posterior_logits, self.config['gumbel_softmax_tmp'])
         else:
@@ -55,7 +55,12 @@ class ZNet(torch.nn.Module):
 
         if self.z_type == 'cont':
             q_z = q_z_samples
-        if torch.rand(1) < .5:
-            return q_z_samples, q_z, q_z_samples, q_z
         else:
-            return q_z_samples, q_z, p_z_samples, p_z
+            logp = torch.log(p_z)
+            logq = torch.log(q_z)
+            kl = torch.sum((logq - logp) * q_z, dim=-1)
+            print('q', q_z, torch.argmax(q_z, dim=-1))
+            print('p', p_z, torch.argmax(p_z, dim=-1))
+            # print('kl', kl)
+            print('meankl', torch.mean(kl))
+        return q_z_samples, q_z, q_z_samples, q_z
