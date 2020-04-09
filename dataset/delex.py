@@ -9,6 +9,7 @@ class Delexicalizer:
         db_file = os.path.join(data_dir, 'db.json')
         self.otgy = None
         self.db = None
+        self.found_tags = None
         self.all_tags = set()
         if os.path.exists(otgy_file):
             with open(otgy_file, 'rt') as fd:
@@ -19,11 +20,12 @@ class Delexicalizer:
 
     def delex_utterance(self, utt):
         utt = utt.lower()
+        self.found_tags = []
         # if self.otgy is not None:
         #     utt = self._replace_otgy(utt)
         if self.db is not None:
             utt = self._replace_db(utt)
-        return utt
+        return utt, self.found_tags
 
     def _replace_otgy(self, utt):
         for slot, values in self.otgy.items():
@@ -38,6 +40,7 @@ class Delexicalizer:
             for attribute, val in entity.items():
                 val = val.lower()
                 if val in utt:
+                    self.found_tags.append(self._make_tag(attribute))
                     utt = utt.replace(val, self._make_tag(attribute))
         return utt
 

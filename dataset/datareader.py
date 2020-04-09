@@ -122,20 +122,22 @@ class Turn:
         self.system = None
         self.usr_slu = None
         self.state = None
-        self.sys_slu = None
+        self.system_nlu = None
         self.parse = None
         self.intent = None
         self.delexicalizer = delexicalizer
     
     def add_user(self, utt):
         if self.delexicalizer is not None:
-            utt = self.delexicalizer.delex_utterance(utt)
+            utt, _ = self.delexicalizer.delex_utterance(utt)
         self.user = tokenize(utt)
 
     def add_system(self, utt):
+        found_tags = []
         if self.delexicalizer is not None:
-            utt = self.delexicalizer.delex_utterance(utt)
+            utt, found_tags = self.delexicalizer.delex_utterance(utt)
         self.system = tokenize(utt)
+        self.system_nlu = found_tags
 
     def add_usr_slu(self, usr_slu):
         self.usr_slu = self._process_slu(usr_slu)

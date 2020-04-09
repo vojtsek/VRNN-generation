@@ -90,7 +90,8 @@ class VRNN(pl.LightningModule):
                                                       if self.training else
                                                       vae_output.user_turn_output.p_z.transpose(1, 0))
             system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.q_z.transpose(1, 0)
-                                                        if self.training else
+                                                        if self.training or
+                                                        self.epoch_number <= self.config['begin_kl_opt_epoch'] else
                                                         vae_output.system_turn_output.p_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
@@ -366,7 +367,7 @@ class VRNN(pl.LightningModule):
         optimizer_prior = torch.optim.SGD(prior_parameters, lr=1e-3)
         self.lr_scheduler =\
             torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
-        return [optimizer_network,]
+        return [optimizer_network, optimizer_prior]
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
         # if self.epoch_number < 20:
@@ -379,9 +380,9 @@ class VRNN(pl.LightningModule):
             optimizer.step()
             optimizer.zero_grad()
         #
-        # if optimizer_i == 1 and self.epoch_number > self.config['begin_kl_opt_epoch']:
-        #     optimizer.step()
-        #     optimizer.zero_grad()
+        if optimizer_i == 1 and self.epoch_number > self.config['begin_kl_opt_epoch']:
+            optimizer.step()
+            optimizer.zero_grad()
 
     def train_dataloader(self):
         return self._train_loader
