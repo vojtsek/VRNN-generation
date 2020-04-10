@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 import os
+import sys
 import shutil
 
 import yaml
@@ -11,6 +12,7 @@ import pytorch_lightning as pl
 import torch
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
+from git import Repo
 
 from .dataset import DataReader, CamRestReader, MultiWOZReader,\
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
@@ -38,9 +40,14 @@ def main(flags):
         print('Output directory not provided, exiting.')
         return
     output_dir = os.path.join(args.output_dir, f'run_{int(time.time())}')
+    if args.train_more:
+        output_dir += '_retrain'
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
     shutil.copy(flags.config, os.path.join(output_dir, 'conf.yaml'))
+    repo = Repo(os.path.dirname(sys.argv[0]))
+    with open(os.path.join(output_dir, 'gitcommit.txt'), 'wt') as fd:
+        print(f'{repo.head.commit}@{repo.active_branch}', file=fd)
 
     embeddings = Embeddings(config['embedding_fn'],
                             out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
@@ -65,6 +72,7 @@ def main(flags):
         model.load_state_dict(checkpoint['state_dict'])
     else:
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
+    if flags.train_more:
         callbacks = [EpochEndCb()]
         logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')
         trainer = pl.Trainer(
@@ -100,12 +108,14 @@ def main(flags):
             for i in range(len(predictions.all_user_predictions)):
                 print(f'\tTurn {i+1}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
-                print(f'\t{" ".join(predictions.all_nlu_predictions[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_usr_nlu_predictions[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_system_predictions[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_sys_nlu_predictions[i])}', file=all_fd)
                 print(f'\tORIG:', file=all_fd)
                 print(f'\t{" ".join(predictions.all_user_gt[i])}', file=all_fd)
-                print(f'\t{" ".join(predictions.all_nlu_gt[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_usr_nlu_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_system_gt[i])}', file=all_fd)
+                print(f'\t{" ".join(predictions.all_sys_nlu_gt[i])}', file=all_fd)
                 print(f'\tprior Z: {" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]])}', file=all_fd)
                 print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
@@ -114,8 +124,8 @@ def main(flags):
                 print(" ".join(predictions.all_system_predictions[i]), file=system_fd)
                 print(" ".join(predictions.all_user_gt[i]), file=user_gt_fd)
                 print(" ".join(predictions.all_system_gt[i]), file=system_gt_fd)
-                print(" ".join(predictions.all_nlu_predictions[i]), file=nlu_fd)
-                print(" ".join(predictions.all_nlu_gt[i]), file=nlu_gt_fd)
+                print(" ".join(predictions.all_usr_nlu_predictions[i]), file=nlu_fd)
+                print(" ".join(predictions.all_usr_nlu_gt[i]), file=nlu_gt_fd)
                 print(" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]]), file=z_post_fd)
 
             print('', file=user_fd)
@@ -132,6 +142,7 @@ if __name__ == '__main__':
     parser.add_argument('--output_dir', type=str)
     parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--model_path', type=str)
+    parser.add_argument('--train_more', action='store_true')
     args = parser.parse_args()
 
     main(args)

@@ -35,14 +35,25 @@ class VAECell(torch.nn.Module):
                                    config['user_decoder_hidden_size'],
                                    config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
-        self.nlu_dec = RNNDecoder(embeddings,
-                                  # config['user_z_logits_dim'] +
-                                  config['input_encoder_hidden_size'] *
-                                  (1 + int(config['bidirectional_encoder'])) +
-                                  config['vrnn_hidden_size'],
-                                  config['user_decoder_hidden_size'],
-                                  config['teacher_forcing_prob'],
-                                  drop_prob=config['drop_prob'])
+
+        self.usr_nlu_dec = RNNDecoder(embeddings,
+                                      # config['user_z_logits_dim'] +
+                                      config['input_encoder_hidden_size'] *
+                                      (1 + int(config['bidirectional_encoder'])) +
+                                      config['vrnn_hidden_size'],
+                                      config['user_decoder_hidden_size'],
+                                      config['teacher_forcing_prob'],
+                                      drop_prob=config['drop_prob'])
+
+        self.sys_nlu_dec = RNNDecoder(embeddings,
+                                      config['user_z_logits_dim'] +
+                                      config['system_z_logits_dim'] +
+                                      # config['input_encoder_hidden_size'] *
+                                      # (1 + int(config['bidirectional_encoder'])) +
+                                      config['vrnn_hidden_size'],
+                                      config['system_decoder_hidden_size'],
+                                      config['teacher_forcing_prob'],
+                                      drop_prob=config['drop_prob'])
 
         self.system_dec = RNNDecoder(embeddings,
                                      config['user_z_logits_dim'] +
@@ -52,7 +63,7 @@ class VAECell(torch.nn.Module):
                                      config['vrnn_hidden_size'],
                                      config['system_decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
-                                     config['drop_prob'])
+                                     drop_prob=config['drop_prob'])
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[None, torch.relu],
@@ -117,7 +128,7 @@ class VAECell(torch.nn.Module):
                           last_encoder_hidden=last_hidden)
 
     def forward(self,
-                user_dials, user_lens, nlu_lens,
+                user_dials, user_lens, usr_nlu_lens, sys_nlu_lens,
                 system_dials, system_lens,
                 previous_vrnn_hidden, user_z_previous, system_z_previous):
         # encode user & system utterances
@@ -127,18 +138,18 @@ class VAECell(torch.nn.Module):
                                           self.config['input_encoder_hidden_size']))
 
         user_turn_output = self._z_module(user_dials ,
-                                          [user_lens, nlu_lens],
+                                          [user_lens, usr_nlu_lens],
                                           encoder_init_state,
                                           previous_vrnn_hidden,
                                           self.user_z_nets,
-                                          [self.user_dec, self.nlu_dec],
+                                          [self.user_dec, self.usr_nlu_dec],
                                           user_z_previous)
         system_turn_output = self._z_module(system_dials,
-                                            [system_lens],
+                                            [system_lens, sys_nlu_lens],
                                             encoder_init_state,
                                             previous_vrnn_hidden,
                                             self.system_z_nets,
-                                            [self.system_dec],
+                                            [self.system_dec, self.sys_nlu_dec],
                                             user_turn_output.q_z.squeeze(1),
                                             prev_z_posterior_projection=user_turn_output.sampled_z,
                                             use_prior_eval=True)

@@ -52,7 +52,7 @@ class DataReader:
                 self.all_words.update([s.val for s in t.usr_slu])
             self.max_dial_len = max(self.max_dial_len, len(d.turns))
             self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
-            self.max_slu_len = max(self.max_slu_len, max([len(t.usr_slu) for t in d.turns]))
+            self.max_slu_len = max(self.max_slu_len, max([max(len(t.usr_slu), len(t.system_nlu)) for t in d.turns]))
         self.length = len(self._dialogues)
 
     def apply_to_dialogues(self, fun):
@@ -137,7 +137,7 @@ class Turn:
         if self.delexicalizer is not None:
             utt, found_tags = self.delexicalizer.delex_utterance(utt)
         self.system = tokenize(utt)
-        self.system_nlu = found_tags
+        self.system_nlu = list(set(found_tags))
 
     def add_usr_slu(self, usr_slu):
         self.usr_slu = self._process_slu(usr_slu)
@@ -154,7 +154,7 @@ class Turn:
     def _process_slu(self, slu):
         if self.delexicalizer is not None:
             for s in slu:
-                s.val = self.delexicalizer.delex_utterance(s.val)
+                s.val, _ = self.delexicalizer.delex_utterance(s.val)
         return slu
 
 

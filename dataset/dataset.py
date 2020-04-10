@@ -34,7 +34,7 @@ class WordToInt(object):
             t.user = [self.embeddings.w2id[tk] for tk in t.user + [Embeddings.EOS]]
             t.system = [self.embeddings.w2id[tk] for tk in t.system + [Embeddings.EOS]]
             t.usr_slu = [self.embeddings.w2id[s.val] for s in t.usr_slu] + [self.embeddings.w2id[Embeddings.EOS]]
-            t.sys_nlu = [self.embeddings.w2id[s.val] for s in t.system_nlu] + [self.embeddings.w2id[Embeddings.EOS]]
+            t.sys_nlu = [self.embeddings.w2id[s] for s in t.system_nlu + [Embeddings.EOS]]
         return sample
 
 

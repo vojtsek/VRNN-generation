@@ -12,7 +12,7 @@ lr_decay_rate: 0.98
 bidirectional_encoder: true
 gumbel_softmax_tmp: 1.0
 teacher_forcing_prob: 0.5
-number_z_vectors: 2
+number_z_vectors: 3
 with_bpr: false
 with_bow_loss: false
 begin_kl_opt_epoch: 40
