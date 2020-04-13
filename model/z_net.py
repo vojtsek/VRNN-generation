@@ -30,6 +30,7 @@ class ZNet(torch.nn.Module):
 
         self.prior_net = FFNet(cond_z_logits_dim + config['vrnn_hidden_size'],
                                config['prior_ff_sizes'],
+                               activations=[torch.tanh],
                                drop_prob=config['drop_prob'])
         self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
 
@@ -60,7 +61,7 @@ class ZNet(torch.nn.Module):
             # logq = torch.log(q_z)
             # kl = torch.sum((logq - logp) * q_z, dim=-1)
             print('q', torch.argmax(q_z, dim=-1))
-            # print('p', torch.argmax(p_z, dim=-1))
+            print('p', torch.argmax(p_z, dim=-1))
             # print('kl', kl)
             # print('meankl', torch.mean(kl))
-        return q_z_samples, q_z, p_z_samples, p_z
+        return q_z_samples, q_z, q_z_samples, q_z

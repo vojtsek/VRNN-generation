@@ -15,7 +15,7 @@ teacher_forcing_prob: 0.5
 number_z_vectors: 3
 with_bpr: false
 with_bow_loss: false
-begin_kl_opt_epoch: 40
+begin_kl_opt_epoch: 1
 
 # KL before start increasing
 init_KL_term: 0.001

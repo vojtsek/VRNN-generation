@@ -70,7 +70,7 @@ def read_z_data(z_data_fd, dial_len=None):
 def main(args):
     z_samples_file = os.path.join(args.source_dir, 'z_posterior.txt')
     with open(z_samples_file, 'rt') as z_post_fd:
-        data = read_z_data(z_post_fd, dial_len=4)
+        data = read_z_data(z_post_fd, dial_len=5)
         visualize_z_distribution(data, args.source_dir)
 
 

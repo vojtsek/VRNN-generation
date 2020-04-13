@@ -47,20 +47,20 @@ class VAECell(torch.nn.Module):
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       config['user_z_logits_dim'] +
-                                      config['system_z_logits_dim'] +
+                                      config['system_z_logits_dim'],
                                       # config['input_encoder_hidden_size'] *
                                       # (1 + int(config['bidirectional_encoder'])) +
-                                      config['vrnn_hidden_size'],
+                                      # config['vrnn_hidden_size'],
                                       config['system_decoder_hidden_size'],
                                       config['teacher_forcing_prob'],
                                       drop_prob=config['drop_prob'])
 
         self.system_dec = RNNDecoder(embeddings,
                                      config['user_z_logits_dim'] +
-                                     config['system_z_logits_dim'] +
+                                     config['system_z_logits_dim'],
                                      # config['input_encoder_hidden_size'] *
                                      # (1 + int(config['bidirectional_encoder'])) +
-                                     config['vrnn_hidden_size'],
+                                     # config['vrnn_hidden_size'],
                                      config['system_decoder_hidden_size'],
                                      config['teacher_forcing_prob'],
                                      drop_prob=config['drop_prob'])
@@ -86,7 +86,7 @@ class VAECell(torch.nn.Module):
         posterior_z_samples_lst, q_z_lst, prior_z_samples_lst, p_z_lst =\
             zip(*[z_net(vrnn_hidden_cat_input, z_previous, previous_vrnn_hidden[0]) for z_net in z_nets])
         if not use_prior_eval or (self.training and
-                                  self.epoch_number < self.config['begin_kl_opt_epoch']):
+                                  self.epoch_number % 3 == 0):
             sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
         else:
             sampled_latent = self.aggregate(torch.stack(prior_z_samples_lst))
@@ -99,7 +99,7 @@ class VAECell(torch.nn.Module):
 
         if prev_z_posterior_projection is not None:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], sampled_latent, prev_z_posterior_projection], dim=1)
+                [sampled_latent, prev_z_posterior_projection], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             # trick, this is actually the user decoder branch
