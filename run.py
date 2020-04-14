@@ -72,7 +72,7 @@ def main(flags):
         model.load_state_dict(checkpoint['state_dict'])
     else:
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
-    if flags.train_more or flags.model_path is not None:
+    if flags.train_more or flags.model_path is None:
         config['retraining'] = flags.train_more
         callbacks = [EpochEndCb()]
         logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')

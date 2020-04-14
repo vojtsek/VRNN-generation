@@ -21,26 +21,21 @@ def visualize_z_distribution(z_data, out_dir):
         plt.savefig(fn)
 
     sns_df = pd.DataFrame(z_data)
-    sns_df.columns = ['turn_number', 'z_val_1', 'z_val_2']
 
-    agg_data_1, agg_data_2 = [], []
-    for turn_number in range(1, int(max(sns_df['turn_number'])) + 1):
-        t_selected = sns_df['turn_number'] == turn_number
-        agg_data_1.append((float(turn_number)-1, np.mean(sns_df[t_selected]['z_val_1'])))
-        agg_data_2.append((float(turn_number)-1, np.mean(sns_df[t_selected]['z_val_2'])))
+    agg_data = [[] for _ in sns_df.columns[1:]]
+    for turn_number in range(1, int(max(sns_df[0])) + 1):
+        t_selected = sns_df[0] == turn_number
+        for i, a_data in enumerate(agg_data):
+            a_data.append((float(turn_number)-1, np.mean(sns_df[t_selected][i+1])))
 
-    agg_df_1 = pd.DataFrame(agg_data_1)
-    agg_df_2 = pd.DataFrame(agg_data_2)
-    agg_df_1.columns = ['turn_number', 'z_mean_val']
-    agg_df_2.columns = ['turn_number', 'z_mean_val']
-
-
-    _plot(sns_df['turn_number'], sns_df['z_val_1'], agg_df_1, os.path.join(out_dir, 'z_coord1.png'))
-    _plot(sns_df['turn_number'], sns_df['z_val_2'], agg_df_2, os.path.join(out_dir, 'z_coord2.png'))
+    for i, a_data in enumerate(agg_data):
+        df = pd.DataFrame(a_data)
+        df.columns = ['turn_number', 'z_mean_val']
+        _plot(sns_df[0], sns_df[i+1], df, os.path.join(out_dir, f'z_coord{i+1}.png'))
 
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
-    ax.scatter(sns_df['turn_number'], sns_df['z_val_1'], sns_df['z_val_2'], zdir='y', c='red', s=100)
+    # ax.scatter(sns_df['turn_number'], sns_df['z_val_1'], sns_df['z_val_2'], zdir='y', c='red', s=100)
     ax.view_init(30, 90)
     plt.savefig(os.path.join(out_dir, 'z_3d.png'))
     #
@@ -63,7 +58,7 @@ def read_z_data(z_data_fd, dial_len=None):
             current_dial_cache = []
             continue
         line = line.split()
-        current_dial_cache.append([int(turn_idx), float(line[0]), float(line[1])])
+        current_dial_cache.append([int(turn_idx)] + [float(z) for z in line])
     return np.array(z_data)
 
 
