@@ -217,11 +217,13 @@ class VRNN(pl.LightningModule):
         log_p_z = torch.log(p_z + 1e-20)
         kl = (log_q_z - log_p_z) * q_z
         q_max, _ = torch.max(q_z, dim=-1)
+        p_max, _ = torch.max(p_z, dim=-1)
         q_diffs = torch.ones(*q_max.shape) - q_max
+        p_diffs = torch.ones(*p_max.shape) - p_max
         # KL per each Z vector
         kl = torch.sum(torch.mean(torch.sum(kl, dim=-1), dim=0))
         ce = F.nll_loss(log_p_z.transpose(2, 1), q_labels, reduction='mean')
-        return kl, torch.mean(q_diffs)
+        return ce, torch.mean(q_diffs), torch.mean(p_diffs)
 
     def _step(self, batch, optimizer_idx=0):
         user_dials, system_dials, usr_nlu_dials, sys_nlu_dials, user_lens,\
@@ -262,7 +264,7 @@ class VRNN(pl.LightningModule):
         if self.config['system_z_type'] == 'cont':
             system_kl_loss = self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
-            system_kl_loss, q_penalty =\
+            system_kl_loss, q_penalty, p_penalty =\
                 self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
@@ -280,7 +282,7 @@ class VRNN(pl.LightningModule):
         if optimizer_idx == 0:
             loss = decoder_loss + lambda_kl * usr_kl_loss # + .1 * q_penalty
         else:
-            loss = system_kl_loss + lambda_kl * total_system_decoder_loss
+            loss = system_kl_loss # + lambda_kl * total_system_decoder_loss
         # loss = decoder_loss + lambda_kl * (usr_kl_loss + system_kl_loss)
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
@@ -414,11 +416,13 @@ class VRNN(pl.LightningModule):
         #         return
 
         # and (self.epoch_number <= self.config['begin_kl_opt_epoch']
-        if optimizer_i == 0 and self.epoch_number % 3 == 0:
+        if optimizer_i == 0 and not self.config['retraining']:
+            print(f'opt 0 step')
             optimizer.step()
             optimizer.zero_grad()
         #
         if optimizer_i == 1:
+            print(f'opt 1 step')
             optimizer.step()
             optimizer.zero_grad()
 

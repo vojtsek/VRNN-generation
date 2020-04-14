@@ -24,8 +24,8 @@ class ZNet(torch.nn.Module):
         else:
             # self.posterior_projection = torch.nn.Linear(config['posterior_ff_sizes1'][-1], config['z_logits_dim'] * 2)
             self.posterior_projection = torch.nn.Linear(z_input_size, self.z_logits_dim * 2)
-            self.prior_projection = torch.nn.Linear(cond_z_logits_dim + config['vrnn_hidden_size'], z_logits_dim)
 
+        self.prior_projection = torch.nn.Linear(cond_z_logits_dim + config['vrnn_hidden_size'], z_logits_dim)
         self.posterior_net2 = FFNet(self.z_logits_dim,
                                     config['posterior_ff_sizes2'],
                                     drop_prob=config['drop_prob'])
@@ -39,8 +39,8 @@ class ZNet(torch.nn.Module):
         # x = self.posterior_net1(x)
         z_posterior_logits = self.posterior_projection(x)
         z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))
-        z_prior_logits = self.prior_projection(torch.cat([z_previous, vrnn_hidden]))
-        z_prior_logits = torch.tanh(self.prior_projection)
+        z_prior_logits = self.prior_projection(torch.cat([z_previous, vrnn_hidden], dim=-1))
+        z_prior_logits = torch.tanh(z_prior_logits)
         p_z = F.softmax(z_prior_logits / self.config['gumbel_softmax_tmp'], dim=-1)
 
         if self.z_type == 'gumbel':
