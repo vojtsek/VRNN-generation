@@ -400,7 +400,11 @@ class VRNN(pl.LightningModule):
         optimizer_prior = torch.optim.SGD(prior_parameters, lr=1e-3)
         self.lr_scheduler =\
             torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
-        return [optimizer_network, ]
+
+        opts = [optimizer_network]
+        if not self.config['fake_prior']:
+            opts.append(optimizer_prior)
+        return opts
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
         # if self.epoch_number < 20:
