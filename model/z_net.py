@@ -31,11 +31,10 @@ class ZNet(torch.nn.Module):
                                     drop_prob=config['drop_prob'])
 
         # self.prior_net = FFNet(z_logits_dim + config['vrnn_hidden_size'],
-        self.prior_net = FFNet(z_logits_dim + config['vrnn_hidden_size'],
+        self.prior_net = FFNet(cond_z_logits_dim + config['vrnn_hidden_size'],
                                config['prior_ff_sizes'],
                                activations=[torch.sigmoid],
                                drop_prob=config['drop_prob'])
-
 
     def forward(self, x, z_previous, vrnn_hidden):
         # x = self.posterior_net1(x)

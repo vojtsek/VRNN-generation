@@ -100,7 +100,7 @@ class VRNN(pl.LightningModule):
                                                       if self.training else
                                                       vae_output.user_turn_output.p_z.transpose(1, 0))
             system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.q_z.transpose(1, 0)
-                                                        if self.training and not self.config['retraining'] else
+                                                        if self.training else
                                                         vae_output.system_turn_output.p_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             usr_nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
@@ -288,7 +288,7 @@ class VRNN(pl.LightningModule):
         if optimizer_idx == 0:
             loss = decoder_loss + lambda_usr_kl * usr_kl_loss # + .1 * q_penalty
         else:
-            loss = system_kl_loss # + total_system_decoder_loss
+            loss = system_kl_loss # + p_penalty + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
@@ -424,7 +424,7 @@ class VRNN(pl.LightningModule):
         #         return
 
         # and (self.epoch_number <= self.config['begin_kl_opt_epoch']
-        if optimizer_i == 0 and not self.config['retraining']:
+        if optimizer_i == 0 and not self.config['retraining'] and self.epoch_number % 5 == 0:
             optimizer.step()
             optimizer.zero_grad()
         #
