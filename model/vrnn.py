@@ -402,11 +402,12 @@ class VRNN(pl.LightningModule):
             if not found:
                 supervised_parameters.append(p)
 
-        prior_parameters.extend(self.vae_cell.system_dec.parameters())
+        # prior_parameters.extend(self.vae_cell.system_dec.parameters())
         all_parameters = self.parameters()
         optimizer_network = torch.optim.Adam(supervised_parameters, lr=1e-3, betas=(0.9, 0.999),
                                              eps=1e-08, weight_decay=0, amsgrad=False)
-        optimizer_prior = torch.optim.SGD(prior_parameters, lr=1e-3)
+        optimizer_prior = torch.optim.Adam(prior_parameters, lr=1e-3, betas=(0.9, 0.999),
+                                           eps=1e-08, weight_decay=0, amsgrad=False)
         self.lr_scheduler =\
             torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
 
