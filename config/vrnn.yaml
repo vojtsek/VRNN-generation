@@ -16,7 +16,7 @@ number_z_vectors: 1
 with_bpr: false
 with_bow_loss: false
 begin_kl_opt_epoch: 1
-fake_prior: true
+fake_prior: false
 min_epochs: 50
 max_epochs: 100
 
