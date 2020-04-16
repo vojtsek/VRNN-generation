@@ -96,11 +96,11 @@ class VRNN(pl.LightningModule):
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        user_z_previous[:bs], system_z_previous[:bs])
             offset += bs
-            user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0)
-                                                      if self.training else
-                                                      vae_output.user_turn_output.p_z.transpose(1, 0))
+
+            user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
             system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.q_z.transpose(1, 0)
-                                                        if self.training else
+                                                        if self.training and
+                                                        torch.rand(1) < self.config['z_teacher_forcing_prob'] else
                                                         vae_output.system_turn_output.p_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             usr_nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
@@ -253,8 +253,9 @@ class VRNN(pl.LightningModule):
         else:
             total_bow_loss = 0
 
-        decoder_loss = (total_system_decoder_loss + total_user_decoder_loss +
-                        total_usr_nlu_decoder_loss ) / 3
+        decoder_losses = [total_system_decoder_loss, total_user_decoder_loss,
+                        total_usr_nlu_decoder_loss, total_sys_nlu_decoder_loss]
+        decoder_loss = torch.mean(torch.stack(decoder_losses))
         batch_sort_perm = reversed(np.argsort(dial_lens))
         dial_lens = dial_lens[batch_sort_perm]
         if self.config['user_z_type'] == 'cont':
@@ -288,7 +289,7 @@ class VRNN(pl.LightningModule):
         if optimizer_idx == 0:
             loss = decoder_loss + lambda_usr_kl * usr_kl_loss # + .1 * q_penalty
         else:
-            loss = system_kl_loss # + p_penalty + total_system_decoder_loss
+            loss = system_kl_loss + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 

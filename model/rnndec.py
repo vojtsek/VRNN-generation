@@ -5,11 +5,13 @@ import torch.nn.functional as F
 class RNNDecoder(torch.nn.Module):
 
     def __init__(self, embeddings, init_hidden_size,
-                 hidden_size, teacher_prob=0.7, drop_prob=0.0):
+                 hidden_size, z_size=None, teacher_prob=0.7, drop_prob=0.0):
         super(RNNDecoder, self).__init__()
         self.embeddings = embeddings
         self.vocab_size = embeddings.num_embeddings
-        self.rnn = torch.nn.LSTM(embeddings.embedding_dim, hidden_size, dropout=drop_prob)
+        rnn_input_dim = embeddings.embedding_dim + z_size if z_size is not None else embeddings.embedding_dim
+        self.concat_z = z_size is not None
+        self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
         self.bridge = torch.nn.Linear(init_hidden_size, hidden_size)
         self.dropout_layer = torch.nn.Dropout(drop_prob)
         self.output_projection = torch.nn.Linear(hidden_size, self.vocab_size)
@@ -29,7 +31,7 @@ class RNNDecoder(torch.nn.Module):
 
         return output, hidden, projected_output
 
-    def forward(self, trg_embed, init_hidden, max_len=None):
+    def forward(self, trg_embed, init_hidden, z=None, max_len=None):
         """Unroll the decoder one step at a time."""
 
         hidden = self.get_init_hidden(init_hidden)
@@ -39,6 +41,8 @@ class RNNDecoder(torch.nn.Module):
 
         prev_embed = torch.zeros((1, init_hidden.shape[0], self.embeddings.embedding_dim))
         for i in range(max_len):
+            if self.concat_z:
+                prev_embed = torch.cat([prev_embed, z.unsqueeze(0)], dim=-1)
             output, hidden, projected_output = self.forward_step(prev_embed, hidden)
             outputs.append(output)
             last_decoder = self.embeddings(torch.argmax(projected_output, dim=2))

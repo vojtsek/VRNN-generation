@@ -35,7 +35,7 @@ class VAECell(torch.nn.Module):
                                     (1 + int(config['bidirectional_encoder'])) +
                                    config['vrnn_hidden_size'],
                                    config['user_decoder_hidden_size'],
-                                   config['teacher_forcing_prob'],
+                                   teacher_prob=config['teacher_forcing_prob'],
                                    drop_prob=config['drop_prob'])
 
         self.usr_nlu_dec = RNNDecoder(embeddings,
@@ -44,7 +44,7 @@ class VAECell(torch.nn.Module):
                                       (1 + int(config['bidirectional_encoder'])) +
                                       config['vrnn_hidden_size'],
                                       config['user_decoder_hidden_size'],
-                                      config['teacher_forcing_prob'],
+                                      teacher_prob=config['teacher_forcing_prob'],
                                       drop_prob=config['drop_prob'])
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
@@ -54,7 +54,7 @@ class VAECell(torch.nn.Module):
                                       # (1 + int(config['bidirectional_encoder'])) +
                                       # config['vrnn_hidden_size'],
                                       config['system_decoder_hidden_size'],
-                                      config['teacher_forcing_prob'],
+                                      teacher_prob=config['teacher_forcing_prob'],
                                       drop_prob=config['drop_prob'])
 
         self.system_dec = RNNDecoder(embeddings,
@@ -64,7 +64,8 @@ class VAECell(torch.nn.Module):
                                      # (1 + int(config['bidirectional_encoder'])) +
                                      # config['vrnn_hidden_size'],
                                      config['system_decoder_hidden_size'],
-                                     config['teacher_forcing_prob'],
+                                     z_size=config['system_z_logits_dim'],
+                                     teacher_prob=config['teacher_forcing_prob'],
                                      drop_prob=config['drop_prob'])
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
@@ -114,7 +115,7 @@ class VAECell(torch.nn.Module):
         all_decoded_outputs = []
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
-                decoder(dials, decoder_init_hidden, torch.max(lens[i]))
+                decoder(dials, decoder_init_hidden, sampled_latent, torch.max(lens[i]))
             all_decoded_outputs.append(decoded_outputs)
 
         if self.config['with_bow_loss']:
