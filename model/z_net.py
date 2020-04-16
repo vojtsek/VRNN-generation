@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 
 from . import FFNet
-from ..utils import gumbel_softmax_sample, normal_sample
+from ..utils import gumbel_softmax_sample, normal_sample, zero_hidden
 
 
 class ZNet(torch.nn.Module):
@@ -25,7 +25,6 @@ class ZNet(torch.nn.Module):
             # self.posterior_projection = torch.nn.Linear(config['posterior_ff_sizes1'][-1], config['z_logits_dim'] * 2)
             self.posterior_projection = torch.nn.Linear(z_input_size, self.z_logits_dim * 2)
 
-        self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
         self.posterior_net2 = FFNet(self.z_logits_dim,
                                     config['posterior_ff_sizes2'],
                                     drop_prob=config['drop_prob'])
@@ -36,11 +35,24 @@ class ZNet(torch.nn.Module):
                                activations=[torch.sigmoid],
                                drop_prob=config['drop_prob'])
 
+        self.lstm_size = 150
+        self.prior_net = torch.nn.LSTMCell(cond_z_logits_dim + config['vrnn_hidden_size'], self.lstm_size)
+        self._reset_hidden()
+        # self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
+        self.prior_projection = torch.nn.Linear(self.lstm_size, z_logits_dim)
+
     def forward(self, x, z_previous, vrnn_hidden):
         # x = self.posterior_net1(x)
         z_posterior_logits = self.posterior_projection(x)
-        z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))
-        z_prior_logits = self.prior_projection(z_prior_logits)
+        bs = vrnn_hidden.shape[0]
+        if bs > self.last_prior_hidden[0].shape[0]:
+            self._reset_hidden()
+            print('RESET')
+        self.last_prior_hidden = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1),
+                                                (self.last_prior_hidden[0][:bs], self.last_prior_hidden[1][:bs]))
+        z_prior_logits = self.prior_projection(self.last_prior_hidden[0])
+        # z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))
+        # z_prior_logits = self.prior_projection(z_prior_logits)
         p_z = F.softmax(z_prior_logits / self.config['gumbel_softmax_tmp'], dim=-1)
 
         if self.z_type == 'gumbel':
@@ -71,3 +83,7 @@ class ZNet(torch.nn.Module):
             p_z = q_z
 
         return q_z_samples, q_z, p_z_samples, p_z
+
+    def _reset_hidden(self):
+        zero_h = zero_hidden((self.config['batch_size'], self.lstm_size))
+        self.last_prior_hidden = (zero_h, zero_h)
