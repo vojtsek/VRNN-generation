@@ -49,7 +49,8 @@ class VAECell(torch.nn.Module):
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       config['user_z_logits_dim'] +
-                                      config['system_z_logits_dim'],
+                                      config['system_z_logits_dim'] +
+                                      config['vrnn_hidden_size'],
                                       # config['input_encoder_hidden_size'] *
                                       # (1 + int(config['bidirectional_encoder'])) +
                                       # config['vrnn_hidden_size'],
@@ -59,7 +60,8 @@ class VAECell(torch.nn.Module):
 
         self.system_dec = RNNDecoder(embeddings,
                                      config['user_z_logits_dim'] +
-                                     config['system_z_logits_dim'],
+                                     config['system_z_logits_dim'] +
+                                     config['vrnn_hidden_size'],
                                      # config['input_encoder_hidden_size'] *
                                      # (1 + int(config['bidirectional_encoder'])) +
                                      # config['vrnn_hidden_size'],
@@ -77,7 +79,7 @@ class VAECell(torch.nn.Module):
     #     todo: activation f?
 
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
-                  z_nets, decoders, z_previous, prev_output=None, use_prior_eval=False):
+                  z_nets, decoders, z_previous, use_prior, prev_output=None):
         # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
         dials = self.embeddings(dials).transpose(1, 0)
         dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
@@ -92,10 +94,10 @@ class VAECell(torch.nn.Module):
             zip(*[z_net(vrnn_hidden_cat_input,
                         prev_z,
                         previous_vrnn_hidden[0]) for z_net in z_nets])
-        if not use_prior_eval or self.training and not self.config['retraining']:
-            sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
-        else:
+        if use_prior:
             sampled_latent = self.aggregate(torch.stack(prior_z_samples_lst))
+        else:
+            sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
         q_z = torch.stack(q_z_lst)
         p_z = torch.stack(p_z_lst)
 
@@ -105,7 +107,7 @@ class VAECell(torch.nn.Module):
 
         if prev_output is not None:
             decoder_init_hidden = torch.cat(
-                [sampled_latent, prev_output.sampled_z], dim=1)
+                [previous_vrnn_hidden[0], sampled_latent, prev_output.sampled_z], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             # trick, this is actually the user decoder branch
@@ -136,7 +138,7 @@ class VAECell(torch.nn.Module):
     def forward(self,
                 user_dials, user_lens, usr_nlu_lens, sys_nlu_lens,
                 system_dials, system_lens,
-                previous_vrnn_hidden, user_z_previous, system_z_previous):
+                previous_vrnn_hidden, user_z_previous, system_z_previous, use_prior):
         # encode user & system utterances
         encoder_init_state = zero_hidden((2,
                                           1 + int(self.config['bidirectional_encoder']),
@@ -149,7 +151,8 @@ class VAECell(torch.nn.Module):
                                           previous_vrnn_hidden,
                                           self.user_z_nets,
                                           [self.user_dec, self.usr_nlu_dec],
-                                          user_z_previous)
+                                          user_z_previous,
+                                          use_prior=False)
         system_turn_output = self._z_module(system_dials,
                                             [system_lens, sys_nlu_lens],
                                             encoder_init_state,
@@ -157,8 +160,9 @@ class VAECell(torch.nn.Module):
                                             self.system_z_nets,
                                             [self.system_dec, self.sys_nlu_dec],
                                             system_z_previous,
+                                            use_prior=use_prior,
                                             prev_output=user_turn_output,
-                                            use_prior_eval=True)
+                                            )
 
         system_sampled_z = system_turn_output.sampled_z
         encoded_inputs = user_turn_output.last_encoder_hidden

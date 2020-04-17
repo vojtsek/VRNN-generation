@@ -10,15 +10,18 @@ batch_size: 8
 drop_prob: 0.65
 lr_decay_rate: 0.98
 bidirectional_encoder: true
-gumbel_softmax_tmp: 1.0
+gumbel_softmax_tmp: 2.0
+gumbel_hard: false
 teacher_forcing_prob: 0.5
 z_teacher_forcing_prob: 0.5
+prior_module_recurrent: false
+kl_to_ce: 1
 number_z_vectors: 3
 with_bpr: false
 with_bow_loss: false
 begin_kl_opt_epoch: 1
 fake_prior: false
-min_epochs: 50
+min_epochs: 70
 max_epochs: 100
 
 # KL before start increasing
@@ -38,6 +41,7 @@ posterior_ff_sizes1:
 posterior_ff_sizes2:
 #  - 200
   - 200
+prior_lstm_size: 150
 prior_ff_sizes:
   - 120
   - 50
