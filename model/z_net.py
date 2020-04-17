@@ -30,41 +30,51 @@ class ZNet(torch.nn.Module):
                                     drop_prob=config['drop_prob'])
 
         # self.prior_net = FFNet(z_logits_dim + config['vrnn_hidden_size'],
-        self.prior_net = FFNet(cond_z_logits_dim + config['vrnn_hidden_size'],
-                               config['prior_ff_sizes'],
-                               activations=[torch.sigmoid],
-                               drop_prob=config['drop_prob'])
+        if self.config['prior_module_recurrent']:
+            self.prior_net = torch.nn.LSTMCell(cond_z_logits_dim, self.config['prior_lstm_size'])
+            self.prior_projection = torch.nn.Linear(self.config['prior_lstm_size'], z_logits_dim)
+            self._reset_hidden()
+        else:
+            self.prior_net = FFNet(cond_z_logits_dim,
+                                   config['prior_ff_sizes'],
+                                   activations=[torch.sigmoid],
+                                   drop_prob=config['drop_prob'])
+            self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
 
-        self.lstm_size = 150
-        self.prior_net = torch.nn.LSTMCell(cond_z_logits_dim, self.lstm_size)
-        self._reset_hidden()
-        # self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
-        self.prior_projection = torch.nn.Linear(self.lstm_size, z_logits_dim)
 
     def forward(self, x, z_previous, vrnn_hidden):
         # x = self.posterior_net1(x)
         z_posterior_logits = self.posterior_projection(x)
-        bs = vrnn_hidden.shape[0]
-        if bs > self.last_prior_hidden[0].shape[0]:
-            self._reset_hidden()
-        self.last_prior_hidden = self.prior_net(torch.cat([z_previous, ], dim=-1),
-                                                (self.last_prior_hidden[0][:bs], self.last_prior_hidden[1][:bs]))
-        z_prior_logits = self.prior_projection(self.last_prior_hidden[0])
+        z_previous = torch.cat([z_previous,], dim=-1)
+        if self.config['prior_module_recurrent']:
+            bs = vrnn_hidden.shape[0]
+            if bs > self.last_prior_hidden[0].shape[0]:
+                self._reset_hidden()
+            self.last_prior_hidden =\
+                self.prior_net(z_previous, (self.last_prior_hidden[0][:bs], self.last_prior_hidden[1][:bs]))
+            z_prior_logits = self.last_prior_hidden[0]
+        else:
+            z_prior_logits = self.prior_net(z_previous)
+        z_prior_logits = self.prior_projection(z_prior_logits)
         # z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))
         # z_prior_logits = self.prior_projection(z_prior_logits)
         p_z = F.softmax(z_prior_logits / self.config['gumbel_softmax_tmp'], dim=-1)
 
         if self.z_type == 'gumbel':
             q_z = F.softmax(z_posterior_logits / self.config['gumbel_softmax_tmp'], dim=-1)
-            q_z_samples, q_z_samples_logits =\
-                gumbel_softmax_sample(z_posterior_logits, self.config['gumbel_softmax_tmp'])
+            q_z_samples =\
+                gumbel_softmax_sample(z_posterior_logits,
+                                      self.config['gumbel_softmax_tmp'],
+                                      hard=self.config['gumbel_hard'])
         else:
             mu = z_posterior_logits[:, :self.z_logits_dim]
             logvar = z_posterior_logits[:, self.z_logits_dim:]
             q_z = z_posterior_logits
             q_z_samples = normal_sample(mu, logvar)
-        p_z_samples, p_z_samples_logits =\
-            gumbel_softmax_sample(z_prior_logits, self.config['gumbel_softmax_tmp'])
+        p_z_samples =\
+            gumbel_softmax_sample(z_prior_logits,
+                                  self.config['gumbel_softmax_tmp'],
+                                  hard=self.config['gumbel_hard'])
         # z_posterior_projection = self.posterior_net2(q_z_samples)
 
         if self.z_type == 'cont':

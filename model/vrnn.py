@@ -87,6 +87,7 @@ class VRNN(pl.LightningModule):
         p_z_samples_matrix, q_z_samples_matrix = [], []
         bow_logits_list = []
         for bs in batch_sizes:
+            use_prior = self.training and torch.rand(1) < self.config['z_teacher_forcing_prob']
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
                                        user_lens_data[offset:offset+bs],
                                        usr_nlu_lens_data[offset:offset+bs],
@@ -94,13 +95,13 @@ class VRNN(pl.LightningModule):
                                        system_dials_data[offset:offset+bs],
                                        system_lens_data[offset:offset+bs],
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
-                                       user_z_previous[:bs], system_z_previous[:bs])
+                                       user_z_previous[:bs], system_z_previous[:bs],
+                                       use_prior)
             offset += bs
 
             user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
             system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.q_z.transpose(1, 0)
-                                                        if self.training and
-                                                        torch.rand(1) < self.config['z_teacher_forcing_prob'] else
+                                                        if use_prior else
                                                         vae_output.system_turn_output.p_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             usr_nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
@@ -418,7 +419,8 @@ class VRNN(pl.LightningModule):
         return opts
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
-        if optimizer_i == 0 and not self.config['retraining'] and self.epoch_number % 1 == 0:
+        if optimizer_i == 0 and not self.config['retraining'] and \
+            self.epoch_number % self.config['kl_to_ce'] == 0:
             optimizer.step()
             optimizer.zero_grad()
         #
