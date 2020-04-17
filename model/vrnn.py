@@ -418,14 +418,7 @@ class VRNN(pl.LightningModule):
         return opts
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
-        # if self.epoch_number < 20:
-        #     if optimizer_i == 0:
-        #         optimizer.step()
-        #         optimizer.zero_grad()
-        #         return
-
-        # and (self.epoch_number <= self.config['begin_kl_opt_epoch']
-        if optimizer_i == 0 and not self.config['retraining'] and self.epoch_number % 5 == 0:
+        if optimizer_i == 0 and not self.config['retraining'] and self.epoch_number % 1 == 0:
             optimizer.step()
             optimizer.zero_grad()
         #

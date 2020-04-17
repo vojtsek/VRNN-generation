@@ -36,7 +36,7 @@ class ZNet(torch.nn.Module):
                                drop_prob=config['drop_prob'])
 
         self.lstm_size = 150
-        self.prior_net = torch.nn.LSTMCell(cond_z_logits_dim + config['vrnn_hidden_size'], self.lstm_size)
+        self.prior_net = torch.nn.LSTMCell(cond_z_logits_dim, self.lstm_size)
         self._reset_hidden()
         # self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
         self.prior_projection = torch.nn.Linear(self.lstm_size, z_logits_dim)
@@ -47,8 +47,7 @@ class ZNet(torch.nn.Module):
         bs = vrnn_hidden.shape[0]
         if bs > self.last_prior_hidden[0].shape[0]:
             self._reset_hidden()
-            print('RESET')
-        self.last_prior_hidden = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1),
+        self.last_prior_hidden = self.prior_net(torch.cat([z_previous, ], dim=-1),
                                                 (self.last_prior_hidden[0][:bs], self.last_prior_hidden[1][:bs]))
         z_prior_logits = self.prior_projection(self.last_prior_hidden[0])
         # z_prior_logits = self.prior_net(torch.cat([z_previous, vrnn_hidden], dim=-1))

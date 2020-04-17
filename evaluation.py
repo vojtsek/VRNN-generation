@@ -26,8 +26,9 @@ class BleuEvaluator(Evaluator):
 
 
 class TurnRecord:
-    def __init__(self, turn, prior_z_vec, posterior_z_vec):
-        self.turn_number = turn
+    def __init__(self, turn_number, turn_type, prior_z_vec, posterior_z_vec):
+        self.turn_number = turn_number
+        self.turn_type = turn_type
         self.prior_z_vector = prior_z_vec
         self.posterior_z_vector = posterior_z_vec
 
@@ -49,7 +50,10 @@ class ZSemanticEvaluator(Evaluator):
             records = []
             for line in in_fd:
                 if '--' in line:
-                    records.append(TurnRecord(current_turn_number, prior_z_vector, posterior_z_vector))
+                    records.append(TurnRecord(current_turn_number,
+                                              '-'.join(current_turn_type),
+                                              prior_z_vector,
+                                              posterior_z_vector))
                     current_turn_number = None
                     current_turn_type = []
                     prior_z_vector = None
@@ -73,9 +77,9 @@ class ZSemanticEvaluator(Evaluator):
                     if 'there are no' in line:
                         current_turn_type.append('NO_MATCH')
 
-        records = sorted(records, key=lambda r: r.turn_number)
-        for t_no, records in groupby(records, key=lambda r: r.turn_number):
-            print(t_no)
+        records = sorted(records, key=lambda r: r.turn_type)
+        for t_tpe, records in groupby(records, key=lambda r: r.turn_type):
+            print(t_tpe)
             t_counter = Counter()
             for record in records:
                 t_counter.update([','.join([str(i) for i in record.prior_z_vector])])
