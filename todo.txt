@@ -1,4 +1,6 @@
  - normalization and tokenization properly
  - add comments!
- - configurable z prior
  - user Z continuous, system Z latent?
+ - fix random seed
+ - contiguous?
+ - unify non-linearities

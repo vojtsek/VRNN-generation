@@ -9,17 +9,18 @@ embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
 batch_size: 8
 drop_prob: 0.65
 lr_decay_rate: 0.98
-bidirectional_encoder: true
 gumbel_softmax_tmp: 2.0
-gumbel_hard: false
 teacher_forcing_prob: 0.5
-z_teacher_forcing_prob: 0.2
-prior_module_recurrent: false
+z_teacher_forcing_prob: 0.4
 kl_to_ce: 1
-number_z_vectors: 3
+number_z_vectors: 1
+begin_kl_opt_epoch: 3
+prior_module_recurrent: false
+gumbel_hard: false
+bidirectional_encoder: true
+use_copynet: false
 with_bpr: false
 with_bow_loss: false
-begin_kl_opt_epoch: 1
 fake_prior: false
 min_epochs: 70
 max_epochs: 100
@@ -50,4 +51,4 @@ bow_layer_size: 400
 user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
 user_z_logits_dim: 150
-system_z_logits_dim: 20
+system_z_logits_dim: 10

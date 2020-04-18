@@ -1,5 +1,5 @@
 import torch
-from torch.nn.utils.rnn import pack_padded_sequence
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from . import FFNet, RNNDecoder
 from .z_net import ZNet
@@ -8,9 +8,10 @@ from ..utils import zero_hidden
 
 class VAECell(torch.nn.Module):
 
-    def __init__(self, embeddings, vrnn_cell, config):
+    def __init__(self, embeddings, vrnn_cell, config, vocab):
         super(VAECell, self).__init__()
         self.config = config
+        self.vocab = vocab
         self.epoch_number = 0
         self.embeddings = embeddings
         embedding_dim = embeddings.embedding_dim
@@ -20,19 +21,19 @@ class VAECell(torch.nn.Module):
                                                config['input_encoder_hidden_size'],
                                                bidirectional=config['bidirectional_encoder'])
 
+        self.encoder_hidden_size = config['input_encoder_hidden_size'] *\
+                                   (1 + int(config['bidirectional_encoder']))
         self.user_z_nets = torch.nn.ModuleList([ZNet(config, config['user_z_type'],
                                                      config['user_z_logits_dim'],
                                                      config['user_z_logits_dim'],)])
         self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type'],
                                                        config['system_z_logits_dim'],
                                                        config['system_z_logits_dim'] +
-                                                       config['input_encoder_hidden_size'] *
-                                                       (1 + int(config['bidirectional_encoder'])))
+                                                       self.encoder_hidden_size)
                                                   for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
                                    # config['user_z_logits_dim'] +
-                                   config['input_encoder_hidden_size'] *
-                                    (1 + int(config['bidirectional_encoder'])) +
+                                   self.encoder_hidden_size +
                                    config['vrnn_hidden_size'],
                                    config['user_decoder_hidden_size'],
                                    teacher_prob=config['teacher_forcing_prob'],
@@ -40,8 +41,7 @@ class VAECell(torch.nn.Module):
 
         self.usr_nlu_dec = RNNDecoder(embeddings,
                                       # config['user_z_logits_dim'] +
-                                      config['input_encoder_hidden_size'] *
-                                      (1 + int(config['bidirectional_encoder'])) +
+                                      self.encoder_hidden_size +
                                       config['vrnn_hidden_size'],
                                       config['user_decoder_hidden_size'],
                                       teacher_prob=config['teacher_forcing_prob'],
@@ -66,25 +66,30 @@ class VAECell(torch.nn.Module):
                                      # (1 + int(config['bidirectional_encoder'])) +
                                      # config['vrnn_hidden_size'],
                                      config['system_decoder_hidden_size'],
+                                     encoder_hidden_size=self.encoder_hidden_size,
                                      z_size=config['system_z_logits_dim'],
                                      teacher_prob=config['teacher_forcing_prob'],
-                                     drop_prob=config['drop_prob'])
+                                     drop_prob=config['drop_prob'],
+                                     padding_idx=self.vocab.w2id[self.vocab.PAD],
+                                     bos_idx=self.vocab.w2id[self.vocab.BOS],
+                                     use_copy=self.config['use_copynet'])
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[None, torch.relu],
-                                    # activations=None,
-                                    drop_prob=config['drop_prob']
-                                    )
+                                    drop_prob=config['drop_prob'])
 
     #     todo: activation f?
 
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
-                  z_nets, decoders, z_previous, use_prior, prev_output=None):
+                  z_nets, decoders, z_previous, use_prior,
+                  copy_dials_idx=None, copy_encoder_hiddens=None, prev_output=None):
         # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
+        dials_idx = dials
         dials = self.embeddings(dials).transpose(1, 0)
         dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
         encoder_hidden = (encoder_init_state[0], encoder_init_state[1])
         encoder_outs, last_encoder_hidden = self.embedding_encoder(dials_packed, encoder_hidden)
+        encoder_outs, _ = pad_packed_sequence(encoder_outs)
         # concat fw+bw
         last_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
         vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
@@ -117,7 +122,12 @@ class VAECell(torch.nn.Module):
         all_decoded_outputs = []
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
-                decoder(dials, decoder_init_hidden, sampled_latent, torch.max(lens[i]))
+                decoder(dials_idx,
+                        decoder_init_hidden,
+                        sampled_latent,
+                        torch.max(lens[i]),
+                        copy_encoder_hiddens,
+                        copy_dials_idx)
             all_decoded_outputs.append(decoded_outputs)
 
         if self.config['with_bow_loss']:
@@ -133,7 +143,8 @@ class VAECell(torch.nn.Module):
                           q_z_samples_lst=posterior_z_samples_lst,
                           bow_logits=bow_logits,
                           sampled_z=sampled_latent,
-                          last_encoder_hidden=last_hidden)
+                          last_encoder_hidden=last_hidden,
+                          encoder_hiddens=encoder_outs)
 
     def forward(self,
                 user_dials, user_lens, usr_nlu_lens, sys_nlu_lens,
@@ -162,6 +173,8 @@ class VAECell(torch.nn.Module):
                                             system_z_previous,
                                             use_prior=use_prior,
                                             prev_output=user_turn_output,
+                                            copy_dials_idx=user_dials,
+                                            copy_encoder_hiddens=user_turn_output.encoder_hiddens
                                             )
 
         system_sampled_z = system_turn_output.sampled_z
@@ -196,7 +209,8 @@ class TurnOutput:
                  q_z_samples_lst=None,
                  bow_logits=None,
                  sampled_z=None,
-                 last_encoder_hidden=None):
+                 last_encoder_hidden=None,
+                 encoder_hiddens=None):
         self.decoded_outputs = decoded_outputs
         self.q_z = q_z
         self.p_z = p_z
@@ -206,6 +220,7 @@ class TurnOutput:
         self.bow_logits = bow_logits
         self.sampled_z = sampled_z
         self.last_encoder_hidden = last_encoder_hidden
+        self.encoder_hiddens = encoder_hiddens
 
 
 class VAECellOutput:

@@ -31,10 +31,11 @@ class WordToInt(object):
 
     def __call__(self, sample):
         for t in sample.turns:
-            t.user = [self.embeddings.w2id[tk] for tk in t.user + [Embeddings.EOS]]
-            t.system = [self.embeddings.w2id[tk] for tk in t.system + [Embeddings.EOS]]
-            t.usr_slu = [self.embeddings.w2id[s.val] for s in t.usr_slu] + [self.embeddings.w2id[Embeddings.EOS]]
-            t.sys_nlu = [self.embeddings.w2id[s] for s in t.system_nlu + [Embeddings.EOS]]
+            t.user = [self.embeddings.w2id[tk] for tk in [Embeddings.BOS] + t.user + [Embeddings.EOS]]
+            t.system = [self.embeddings.w2id[tk] for tk in [Embeddings.BOS] + t.system + [Embeddings.EOS]]
+            t.usr_slu = [self.embeddings.w2id[Embeddings.BOS]] +\
+                        [self.embeddings.w2id[s.val] for s in t.usr_slu] + [self.embeddings.w2id[Embeddings.EOS]]
+            t.sys_nlu = [self.embeddings.w2id[s] for s in [Embeddings.BOS] + t.system_nlu + [Embeddings.EOS]]
         return sample
 
 

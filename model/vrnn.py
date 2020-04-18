@@ -34,7 +34,10 @@ class VRNN(pl.LightningModule):
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
         self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
-        self.vae_cell = VAECell(self.embeddings_matrix, self.vrnn_cell, self.config)
+        self.vae_cell = VAECell(self.embeddings_matrix,
+                                self.vrnn_cell,
+                                self.config,
+                                embeddings)
         self.epoch_number = 0
         self.k = config['k_loss_coeff']
         self.alpha = config['alpha_coeff_step']
@@ -87,7 +90,7 @@ class VRNN(pl.LightningModule):
         p_z_samples_matrix, q_z_samples_matrix = [], []
         bow_logits_list = []
         for bs in batch_sizes:
-            use_prior = self.training and torch.rand(1) < self.config['z_teacher_forcing_prob']
+            use_prior = self.training and np.random.rand(1) < self.config['z_teacher_forcing_prob']
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
                                        user_lens_data[offset:offset+bs],
                                        usr_nlu_lens_data[offset:offset+bs],
