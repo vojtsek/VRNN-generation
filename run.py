@@ -4,12 +4,14 @@ import time
 import os
 import sys
 import shutil
+import random
 
 import yaml
 from torchvision.transforms import Compose as TorchCompose
 from torch.utils.data import DataLoader as TorchDataLoader
 import pytorch_lightning as pl
 import torch
+import numpy
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
 from git import Repo
@@ -18,6 +20,11 @@ from .dataset import DataReader, CamRestReader, MultiWOZReader,\
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 
 from .model import VRNN, EpochEndCb, checkpoint_callback
+
+seed = 42
+numpy.random.seed(seed)
+torch.manual_seed(seed)
+random.seed(seed)
 
 
 def main(flags):
@@ -74,7 +81,7 @@ def main(flags):
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
     if flags.train_more or flags.model_path is None:
         config['retraining'] = flags.train_more
-        callbacks = [EpochEndCb()]
+        callbacks = [EpochEndCb(), EvaluationCb(output_dir, valid_dataset)]
         logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')
         trainer = pl.Trainer(
             min_epochs=config['min_epochs'],
@@ -87,9 +94,21 @@ def main(flags):
             progress_bar_refresh_rate=1
         )
         trainer.fit(model)
+        run_evaluation(output_dir, model, valid_dataset)
 
+
+class EvaluationCb(pl.Callback):
+    def __init__(self, output_dir, dataset):
+        self.output_dir = output_dir
+        self.dataset = dataset
+
+    def on_epoch_end(self, trainer, model):
+        run_evaluation(self.output_dir, model, self.dataset)
+
+
+def run_evaluation(output_dir, model, dataset):
     model.eval()
-    loader = TorchDataLoader(valid_dataset, batch_size=1, shuffle=True)
+    loader = TorchDataLoader(dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, 'output_all.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \
@@ -101,7 +120,7 @@ def main(flags):
             open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd:
 
         for d, val_batch in enumerate(loader):
-            predictions = model.predict(val_batch, embeddings.id2w)
+            predictions = model.predict(val_batch)
             assert len(predictions.all_user_predictions) ==\
                 len(predictions.all_system_predictions) ==\
                 len(predictions.all_z_samples)

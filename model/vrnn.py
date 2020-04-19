@@ -20,7 +20,7 @@ class VRNN(pl.LightningModule):
                  test_loader: DataLoader):
         super(VRNN, self).__init__()
         self.config = config
-        self.embeddings = Embeddings
+        self.embeddings = embeddings
         self._train_loader = train_loader
         self._valid_loader = valid_loader
         self._test_loader = test_loader
@@ -345,10 +345,11 @@ class VRNN(pl.LightningModule):
             predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
             ground_truths.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
 
-    def predict(self, batch, inv_vocab):
+    def predict(self, batch, inv_vocab=None):
         # user_dials, system_dials, user_lens, system_lens, dial_lens = batch
         step_output = self.forward(*batch)
-
+        if inv_vocab is None:
+            inv_vocab = self.embeddings.id2w
         all_user_predictions, all_user_gt = [], []
         all_system_predictions, all_system_gt = [], []
         all_usr_nlu_predictions, all_usr_nlu_gt = [], []

@@ -49,6 +49,7 @@ class VAECell(torch.nn.Module):
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       config['user_z_logits_dim'] +
+                                      config['vrnn_hidden_size'] +
                                       config['system_z_logits_dim'],
                                       # config['vrnn_hidden_size'],
                                       # config['input_encoder_hidden_size'] *
@@ -60,6 +61,7 @@ class VAECell(torch.nn.Module):
 
         self.system_dec = RNNDecoder(embeddings,
                                      config['user_z_logits_dim'] +
+                                     config['vrnn_hidden_size'] +
                                      config['system_z_logits_dim'],
                                      # config['vrnn_hidden_size'],
                                      # config['input_encoder_hidden_size'] *
@@ -72,7 +74,8 @@ class VAECell(torch.nn.Module):
                                      drop_prob=config['drop_prob'],
                                      padding_idx=self.vocab.w2id[self.vocab.PAD],
                                      bos_idx=self.vocab.w2id[self.vocab.BOS],
-                                     use_copy=self.config['use_copynet'])
+                                     use_copy=self.config['use_copynet'],
+                                     max_len=60)
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[None, torch.relu],
@@ -112,7 +115,7 @@ class VAECell(torch.nn.Module):
 
         if prev_output is not None:
             decoder_init_hidden = torch.cat(
-                [ sampled_latent, prev_output.sampled_z], dim=1)
+                [previous_vrnn_hidden[0], sampled_latent, prev_output.sampled_z], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             # trick, this is actually the user decoder branch

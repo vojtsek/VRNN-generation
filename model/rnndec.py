@@ -7,7 +7,7 @@ class RNNDecoder(torch.nn.Module):
 
     def __init__(self, embeddings, init_hidden_size,
                  hidden_size, encoder_hidden_size=None, z_size=None,
-                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False):
+                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False, max_len=1000):
         super(RNNDecoder, self).__init__()
         self.embeddings = embeddings
         self.padding_idx = padding_idx
@@ -16,7 +16,7 @@ class RNNDecoder(torch.nn.Module):
         rnn_input_dim = embeddings.embedding_dim + z_size if z_size is not None else embeddings.embedding_dim
         self.concat_z = z_size is not None
         if use_copy:
-            self.rnn = torch.nn.LSTM(rnn_input_dim + encoder_hidden_size, hidden_size, dropout=drop_prob)
+            self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
         else:
             self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
         self.bridge = torch.nn.Linear(init_hidden_size, hidden_size)
@@ -25,8 +25,11 @@ class RNNDecoder(torch.nn.Module):
         self.output_projection = torch.nn.Linear(hidden_size, self.vocab_size)
         self.encoder_hidden_size = encoder_hidden_size
         self.use_copy = use_copy
+        self.max_len = max_len
         if use_copy:
-            self.copy_weights = torch.nn.Linear(encoder_hidden_size, hidden_size)
+            self.attention_proj = torch.nn.Linear(hidden_size, encoder_hidden_size)
+            self.attn_combine = torch.nn.Linear(2 * embeddings.embedding_dim, rnn_input_dim - z_size)
+            self.copy_weights = torch.nn.Linear(encoder_hidden_size, rnn_input_dim)
         else:
             self.copy_weights = None
         self.teacher_prob = teacher_prob
@@ -45,7 +48,15 @@ class RNNDecoder(torch.nn.Module):
         # update rnn hidden state
         input_tk_embed = self.embeddings(input_tk_idx)
         if self.use_copy:
-            rnn_input = torch.cat([input_tk_embed, weighted_attention], dim=-1)
+            h = self.attention_proj(hidden[0]).squeeze(0).unsqueeze(-1)
+            attn_weights = encoder_hidden_states.transpose(1, 0).contiguous().bmm(h)
+            attn_weights = F.softmax(attn_weights).squeeze(-1).unsqueeze(1)
+                # self.attention_score(torch.cat([input_tk_embed, hidden[0]], dim=-1)), dim=1) \
+                #                .transpose(1, 0)[..., :encoder_hidden_states.shape[0]]
+            attn_applied = torch.bmm(attn_weights, encoder_hidden_states.transpose(1, 0).contiguous()).transpose(1, 0)
+            rnn_input = torch.cat([input_tk_embed, attn_applied.contiguous()], dim=-1)
+            rnn_input = self.attn_combine(rnn_input)
+
         else:
             rnn_input = input_tk_embed
         if concat_z is not None:
@@ -59,6 +70,7 @@ class RNNDecoder(torch.nn.Module):
         if self.copy_weights is None:
             return output, hidden, projected_output, None
 
+        return output, hidden, projected_output, None
         assert encoder_hidden_states is not None, 'encoder hidden states need to be given if copy mechanism is there'
         assert encoder_idxs is not None, 'encoder indices need to be given if copy mechanism is there'
         encoder_hidden_states = encoder_hidden_states.transpose(1, 0)
@@ -106,8 +118,6 @@ class RNNDecoder(torch.nn.Module):
         # 		attn[i] = attn[i] / tmp_sum.data[0]
         attn = attn.unsqueeze(1)  # [b x 1 x seq]
         weighted = torch.bmm(attn, encoder_hidden_states).transpose(1, 0)
-
-        print(torch.argmax(projected_output, dim=-1) - torch.argmax(out, dim=-1))
 
         return output, hidden, out.unsqueeze(0), weighted
 
