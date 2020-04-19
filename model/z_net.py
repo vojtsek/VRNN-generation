@@ -79,12 +79,12 @@ class ZNet(torch.nn.Module):
 
         if self.z_type == 'cont':
             q_z = q_z_samples
-        else:
+        # else:
             # logp = torch.log(p_z)
             # logq = torch.log(q_z)
             # kl = torch.sum((logq - logp) * q_z, dim=-1)
-            print('q', torch.argmax(q_z, dim=-1))
-            print('p', torch.argmax(p_z, dim=-1))
+            # print('q', torch.argmax(q_z, dim=-1))
+            # print('p', torch.argmax(p_z, dim=-1))
             # print('kl', kl)
             # print('meankl', torch.mean(kl))
         if self.config['fake_prior']:

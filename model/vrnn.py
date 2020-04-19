@@ -228,7 +228,7 @@ class VRNN(pl.LightningModule):
         # KL per each Z vector
         kl = torch.sum(torch.mean(torch.sum(kl, dim=-1), dim=0))
         ce = F.nll_loss(log_p_z.transpose(2, 1), q_labels, reduction='mean')
-        print('KL, CE', kl, ce)
+        # print('KL, CE', kl, ce)
         return ce + kl, torch.mean(q_diffs), torch.mean(p_diffs)
 
     def _step(self, batch, optimizer_idx=0):

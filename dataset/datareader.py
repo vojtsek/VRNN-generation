@@ -117,7 +117,7 @@ class Dialogue:
 
 class Turn:
 
-    def __init__(self, delexicalizer):
+    def __init__(self, delexicalizer=None):
         self.user = None
         self.system = None
         self.usr_slu = None
@@ -225,9 +225,16 @@ class MultiWOZReader:
                     continue
                 if i % 2 == 1:
                     turn = Turn()
-                    turn.add_user(text, delexicalizer)
+                    if 'dialog_act' in t:
+                        slu = self.parse_slu(t['dialog_act'])
+                    else:
+                        slu = []
+
+                    turn.add_usr_slu(slu)
+                    turn.add_user(text)
                 else:
-                    turn.add_system(text, delexicalizer)
+                    turn.add_system(text)
+                    turn.add_sys_slu([])
                     dialogue.add_turn(turn)
                     continue
 

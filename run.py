@@ -58,12 +58,12 @@ def main(flags):
 
     embeddings = Embeddings(config['embedding_fn'],
                             out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
-                            extern_vocab=[w for w, _ in data_reader.all_words.most_common(5000)])
+                            extern_vocab=[w for w, _ in data_reader.all_words.most_common(2500)])
     # embeddings.add_tokens_rnd(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
-                                                data_reader.max_turn_len + 2,
+                                                min(25, data_reader.max_turn_len + 2),
                                                 data_reader.max_slu_len + 2),  # +2 for <BOS>,<EOS>
                                         ToTensor()])
     train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)
@@ -104,6 +104,7 @@ class EvaluationCb(pl.Callback):
 
     def on_epoch_end(self, trainer, model):
         run_evaluation(self.output_dir, model, self.dataset)
+        model.train()
 
 
 def run_evaluation(output_dir, model, dataset):

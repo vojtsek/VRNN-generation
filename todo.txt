@@ -1,4 +1,4 @@
  - normalization and tokenization properly
  - add comments!
- - fix random seed
  - unify non-linearities
+ - logging
