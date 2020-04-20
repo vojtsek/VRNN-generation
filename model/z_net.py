@@ -4,6 +4,8 @@ import torch.nn.functional as F
 from . import FFNet
 from ..utils import gumbel_softmax_sample, normal_sample, zero_hidden
 
+torch.manual_seed(0)
+
 
 class ZNet(torch.nn.Module):
 

@@ -5,7 +5,7 @@ from . import FFNet, RNNDecoder
 from .z_net import ZNet
 from ..utils import zero_hidden
 
-
+torch.manual_seed(0)
 class VAECell(torch.nn.Module):
 
     def __init__(self, embeddings, vrnn_cell, config, vocab):

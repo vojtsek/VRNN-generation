@@ -63,7 +63,7 @@ def main(flags):
     composed_transforms = TorchCompose([WordToInt(embeddings),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
-                                                min(25, data_reader.max_turn_len + 2),
+                                                data_reader.max_turn_len + 2,
                                                 data_reader.max_slu_len + 2),  # +2 for <BOS>,<EOS>
                                         ToTensor()])
     train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)

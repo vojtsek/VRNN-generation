@@ -2,6 +2,9 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+torch.manual_seed(0)
+np.random.seed(0)
+
 
 class RNNDecoder(torch.nn.Module):
 
