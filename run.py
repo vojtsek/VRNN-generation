@@ -60,7 +60,7 @@ def main(flags):
                             out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=[w for w, _ in data_reader.all_words.most_common(2500)])
     # embeddings.add_tokens_rnd(delexicalizer.all_tags)
-    composed_transforms = TorchCompose([WordToInt(embeddings),
+    composed_transforms = TorchCompose([WordToInt(embeddings, config['db_cutoff']),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 data_reader.max_dial_len,
                                                 data_reader.max_turn_len + 2,

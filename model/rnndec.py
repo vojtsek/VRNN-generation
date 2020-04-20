@@ -9,17 +9,17 @@ np.random.seed(0)
 class RNNDecoder(torch.nn.Module):
 
     def __init__(self, embeddings, init_hidden_size,
-                 hidden_size, encoder_hidden_size=None, z_size=None,
+                 hidden_size, encoder_hidden_size=None, concat_size=None,
                  padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False, max_len=1000):
         super(RNNDecoder, self).__init__()
         self.embeddings = embeddings
         self.padding_idx = padding_idx
         self.bos_idx = bos_idx
         self.vocab_size = embeddings.num_embeddings
-        rnn_input_dim = embeddings.embedding_dim + z_size if z_size is not None else embeddings.embedding_dim
-        self.concat_z = z_size is not None
+        rnn_input_dim = embeddings.embedding_dim + concat_size if concat_size is not None else embeddings.embedding_dim
+        self.concat = concat_size is not None
         if use_copy:
-            self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
+            self.rnn = torch.nn.LSTM(rnn_input_dim + embeddings.embedding_dim, hidden_size, dropout=drop_prob)
         else:
             self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
         self.bridge = torch.nn.Linear(init_hidden_size, hidden_size)
@@ -31,7 +31,7 @@ class RNNDecoder(torch.nn.Module):
         self.max_len = max_len
         if use_copy:
             self.attention_proj = torch.nn.Linear(hidden_size, encoder_hidden_size)
-            self.attn_combine = torch.nn.Linear(2 * embeddings.embedding_dim, rnn_input_dim - z_size)
+            self.attn_combine = torch.nn.Linear(2 * embeddings.embedding_dim, rnn_input_dim - concat_size)
             self.copy_weights = torch.nn.Linear(encoder_hidden_size, rnn_input_dim)
         else:
             self.copy_weights = None
@@ -58,7 +58,7 @@ class RNNDecoder(torch.nn.Module):
                 #                .transpose(1, 0)[..., :encoder_hidden_states.shape[0]]
             attn_applied = torch.bmm(attn_weights, encoder_hidden_states.transpose(1, 0).contiguous()).transpose(1, 0)
             rnn_input = torch.cat([input_tk_embed, attn_applied.contiguous()], dim=-1)
-            rnn_input = self.attn_combine(rnn_input)
+            # rnn_input = self.attn_combine(rnn_input)
 
         else:
             rnn_input = input_tk_embed
@@ -124,7 +124,7 @@ class RNNDecoder(torch.nn.Module):
 
         return output, hidden, out.unsqueeze(0), weighted
 
-    def forward(self, trg_embed, init_hidden, z=None, max_len=None, encoder_hidden_states=None, encoder_idxs=None):
+    def forward(self, trg_embed, init_hidden, to_concat=None, max_len=None, encoder_hidden_states=None, encoder_idxs=None):
         """Unroll the decoder one step at a time."""
 
         hidden = self.get_init_hidden(init_hidden)
@@ -144,7 +144,7 @@ class RNNDecoder(torch.nn.Module):
                                   encoder_hidden_states,
                                   encoder_idxs,
                                   weighted_attention,
-                                  z.unsqueeze(0) if self.concat_z else None)
+                                  to_concat.unsqueeze(0) if self.concat else None)
             outputs.append(output)
             last_decoder = torch.argmax(projected_output, dim=2)
             # teacher forcing

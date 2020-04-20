@@ -1,18 +1,35 @@
 import pickle
 from collections import Counter
+import json
 
 import numpy
 
 from ..utils import tokenize
 
 
+class JSONDb:
+    def __init__(self, fn):
+        with open(fn, 'rt') as fd:
+            self.data = json.load(fd)
+
+    def search(self, **query):
+        results = []
+        for entry in self.data:
+            match = all([col in entry and entry[col] == val for col, val in query])
+            if match:
+                results.append(entry)
+        return results
+
+
 class DataReader:
 
-    def __init__(self, data=None, reader=None, saved_dialogues=None, delexicalizer=None, train=.8, valid=.1):
+    def __init__(self, data=None, reader=None, saved_dialogues=None,
+                 delexicalizer=None, train=.8, valid=.1, db_file=None):
         self._dialogues = []
         self.max_dial_len = 0
         self.max_turn_len = 0
         self.max_slu_len = 0
+        self.db = None if db_file is None else JSONDb(db_file)
         self.delexicalizer = delexicalizer
         self.all_words = Counter()
         if saved_dialogues is not None:
@@ -50,6 +67,15 @@ class DataReader:
                 self.all_words.update(t.user)
                 self.all_words.update(t.system)
                 self.all_words.update([s.val for s in t.usr_slu])
+
+                if self.db is not None:
+                    query = {s.slot: s.val for s in t.usr_slu}
+                    db_result = self.db.search(**query)
+                    print(db_result)
+                    t.db_len = len(db_result)
+                else:
+                    t.db_len = 0
+
             self.max_dial_len = max(self.max_dial_len, len(d.turns))
             self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
             self.max_slu_len = max(self.max_slu_len, max([max(len(t.usr_slu), len(t.system_nlu)) for t in d.turns]))

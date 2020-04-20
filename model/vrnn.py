@@ -43,8 +43,9 @@ class VRNN(pl.LightningModule):
         self.alpha = config['alpha_coeff_step']
         self.lmbd = config['default_lambda_loss']
 
-    def forward(self, user_dials, system_dials, usr_nlu_dials, sys_nlu_dials,
-                user_lens, system_lens, usr_nlu_lens, sys_nlu_lens, dial_lens):
+    def forward(self, user_dials, system_dials, usr_nlu_dials,
+                sys_nlu_dials, user_lens, system_lens, usr_nlu_lens,
+                sys_nlu_lens, db_res, dial_lens):
         batch_sort_perm = reversed(np.argsort(dial_lens))
         user_dials = user_dials[batch_sort_perm].transpose(1, 0)
         user_lens = user_lens[batch_sort_perm].transpose(1, 0)
@@ -54,6 +55,7 @@ class VRNN(pl.LightningModule):
         sys_nlu_lens = sys_nlu_lens[batch_sort_perm].transpose(1, 0)
         system_dials = system_dials[batch_sort_perm].transpose(1, 0)
         system_lens = system_lens[batch_sort_perm].transpose(1, 0)
+        db_res = db_res[batch_sort_perm].transpose(1, 0)
         dial_lens = dial_lens[batch_sort_perm]
 
         user_dials_data, batch_sizes, sorted_indices, unsorted_indices =\
@@ -64,6 +66,8 @@ class VRNN(pl.LightningModule):
             pack_padded_sequence(usr_nlu_dials, dial_lens, enforce_sorted=False)
         usr_nlu_lens_data, _, __, ___ = \
             pack_padded_sequence(usr_nlu_lens, dial_lens, enforce_sorted=False)
+        db_res_data, _, __, ___ = \
+            pack_padded_sequence(db_res, dial_lens, enforce_sorted=False)
 
         sys_nlu_dials_data, batch_sizes, sorted_indices, unsorted_indices = \
             pack_padded_sequence(sys_nlu_dials, dial_lens, enforce_sorted=False)
@@ -74,6 +78,7 @@ class VRNN(pl.LightningModule):
             pack_padded_sequence(system_dials, dial_lens, enforce_sorted=False)
         system_lens_data, _, __, ___ = \
             pack_padded_sequence(system_lens, dial_lens, enforce_sorted=False)
+
 
         initial_hidden = zero_hidden((2,
                                       self.config['batch_size'],
@@ -97,6 +102,7 @@ class VRNN(pl.LightningModule):
                                        sys_nlu_lens_data[offset:offset+bs],
                                        system_dials_data[offset:offset+bs],
                                        system_lens_data[offset:offset+bs],
+                                       db_res_data[offset:offset+bs],
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        user_z_previous[:bs], system_z_previous[:bs],
                                        use_prior)
@@ -233,7 +239,7 @@ class VRNN(pl.LightningModule):
 
     def _step(self, batch, optimizer_idx=0):
         user_dials, system_dials, usr_nlu_dials, sys_nlu_dials, user_lens,\
-        system_lens, usr_nlu_lens, sys_nlu_lens, dial_lens = batch
+        system_lens, usr_nlu_lens, sys_nlu_lens, db_res, dial_lens = batch
         step_output = self.forward(*batch)
         total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
                                                                 step_output.user_dials,

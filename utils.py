@@ -5,6 +5,9 @@ import torch
 import torch.nn.functional as torch_fun
 
 
+torch.manual_seed(0)
+np.random.seed(0)
+
 def tokenize(utt):
     utt = utt.replace('\'s', ' is')
     utt = utt.replace('\'d', ' would')
@@ -40,6 +43,12 @@ def pad_dial(turns, max_dial_len, max_turn_len, pad):
         turn_lens.append(0)
     return np.array(padded), np.array(turn_lens)
 
+
+def embed_oh(vec, size):
+    vec = vec.unsqueeze(-1).repeat(1, 1, size[-1])
+    oh = torch.zeros(*size)
+    oh.scatter(1, vec, 2)
+    return oh
 
 def zero_hidden(sizes):
     return torch.randn(*sizes)

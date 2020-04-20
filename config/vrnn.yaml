@@ -18,12 +18,13 @@ begin_kl_opt_epoch: 3
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
-use_copynet: true
+use_copynet: false
 with_bpr: false
 with_bow_loss: false
 fake_prior: false
-min_epochs: 70
+min_epochs: 90
 max_epochs: 100
+db_cutoff: 2
 
 # KL before start increasing
 init_KL_term: 0.001
@@ -34,8 +35,8 @@ default_lambda_loss: 1.0
 # layer sizes
 input_encoder_hidden_size: 150
 user_decoder_hidden_size: 200
-system_decoder_hidden_size: 200
-vrnn_hidden_size: 200
+system_decoder_hidden_size: 250
+vrnn_hidden_size: 250
 posterior_ff_sizes1:
   - 200
 #  - 200
@@ -51,4 +52,4 @@ bow_layer_size: 400
 user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
 user_z_logits_dim: 150
-system_z_logits_dim: 25
+system_z_logits_dim: 15

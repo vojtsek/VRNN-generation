@@ -26,7 +26,8 @@ class Dataset(TorchDataset):
 
 class WordToInt(object):
 
-    def __init__(self, embeddings: Embeddings):
+    def __init__(self, embeddings: Embeddings, db_max: int):
+        self.db_max = db_max
         self.embeddings = embeddings
 
     def __call__(self, sample):
@@ -36,6 +37,7 @@ class WordToInt(object):
             t.usr_slu = [self.embeddings.w2id[Embeddings.BOS]] +\
                         [self.embeddings.w2id[s.val] for s in t.usr_slu] + [self.embeddings.w2id[Embeddings.EOS]]
             t.sys_nlu = [self.embeddings.w2id[s] for s in [Embeddings.BOS] + t.system_nlu + [Embeddings.EOS]]
+            t.db = min(t.db_len, self.db_max)
         return sample
 
 
@@ -52,6 +54,7 @@ class Padding(object):
         system_turns = [t.system for t in sample.turns]
         usr_nlu_turns = [t.usr_slu for t in sample.turns]
         sys_nlu_turns = [t.sys_nlu for t in sample.turns]
+        db_turns = [[t.db] for t in sample.turns]
         user_padded_dial, user_turn_lens = pad_dial(
             user_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
         system_padded_dial, system_turn_lens = pad_dial(
@@ -60,6 +63,8 @@ class Padding(object):
             usr_nlu_turns, self.max_dial_len, self.max_slu_len, self.pad_token)
         sys_nlu_padded_dial, sys_nlu_turn_lens = pad_dial(
             sys_nlu_turns, self.max_dial_len, self.max_slu_len, self.pad_token)
+        db_padded_dial, _ = pad_dial(
+            db_turns, self.max_dial_len, 1, self.pad_token)
 
         return {
             'user_dials': user_padded_dial,
@@ -70,6 +75,7 @@ class Padding(object):
             'system_turn_lens': system_turn_lens,
             'usr_nlu_turn_lens': usr_nlu_turn_lens,
             'sys_nlu_turn_lens': sys_nlu_turn_lens,
+            'db_dials': db_padded_dial,
             'dial_len': np.array(len(sample.turns))
         }
 
@@ -85,4 +91,5 @@ class ToTensor(object):
                 torch.from_numpy(sample['system_turn_lens']),
                 torch.from_numpy(sample['usr_nlu_turn_lens']),
                 torch.from_numpy(sample['sys_nlu_turn_lens']),
+                torch.from_numpy(sample['db_dials']),
                 torch.from_numpy(sample['dial_len']))
