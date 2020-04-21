@@ -14,8 +14,7 @@ class ZNet(torch.nn.Module):
         self.config = config
         self.z_logits_dim = z_logits_dim
         self.z_type = z_type
-        z_input_size = config['input_encoder_hidden_size'] *\
-                       (1 + int(config['bidirectional_encoder'])) +\
+        z_input_size = config['encoder_hidden_total_size'] +\
                        config['vrnn_hidden_size']
         self.posterior_net1 = FFNet(z_input_size,
                                     config['posterior_ff_sizes1'],
@@ -42,7 +41,6 @@ class ZNet(torch.nn.Module):
                                    activations=[torch.sigmoid],
                                    drop_prob=config['drop_prob'])
             self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
-
 
     def forward(self, x, z_previous, vrnn_hidden):
         # x = self.posterior_net1(x)

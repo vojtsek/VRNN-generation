@@ -29,7 +29,7 @@ class VRNN(pl.LightningModule):
         # hidden is configured
         self.vrnn_cell = torch.nn.LSTMCell(
             # user input (possibly bidirectional) + system logits
-            config['system_z_logits_dim'] +
+            config['system_z_total_size'] +
             config['input_encoder_hidden_size'] * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
@@ -87,7 +87,7 @@ class VRNN(pl.LightningModule):
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
         user_z_previous = zero_hidden((self.config['batch_size'], self.config['user_z_logits_dim']))
-        system_z_previous = zero_hidden((self.config['batch_size'], self.config['system_z_logits_dim']))
+        system_z_previous = zero_hidden((self.config['batch_size'], self.config['system_z_total_size']))
         user_outputs, system_outputs = [], []
         usr_nlu_outputs, sys_nlu_outputs = [], []
         user_q_zs, user_p_zs, z_samples = [], [], []
