@@ -154,17 +154,21 @@ class VRNN(pl.LightningModule):
                               p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
                               q_z_samples_matrix=_pad_packed(q_z_samples_matrix))
 
-    def _compute_decoder_ce_loss(self, outputs, reference, output_lens):
+    def _compute_decoder_ce_loss(self, outputs, reference, output_lens, pr=False):
         total_loss = 0
         total_count = 0
         for i, uo in enumerate(outputs):
             batch_size = uo.shape[1]
             ud_reference = reference[i].transpose(0, 1)[:uo.shape[0]]
             batch_lens = output_lens[i, :batch_size]
-            output_serialized, lens, sorted_indices, unsorted_indices = \
-                pack_padded_sequence(uo, batch_lens, enforce_sorted=False)
-            reference_serialized, lens, sorted_indices, unsorted_indices = \
-                pack_padded_sequence(ud_reference, batch_lens, enforce_sorted=False)
+            sort_perm = reversed(np.argsort(batch_lens))
+            output_serialized, lens1, sorted_indices, unsorted_indices = \
+                pack_padded_sequence(uo[:, sort_perm, :], batch_lens[sort_perm], enforce_sorted=True)
+            reference_serialized, lens2, sorted_indices, unsorted_indices = \
+                pack_padded_sequence(ud_reference[:, sort_perm], batch_lens[sort_perm], enforce_sorted=True)
+                # print(torch.argmax(output_serialized, dim=-1))
+                # print(reference_serialized)
+                # print(batch_size)
             total_loss += F.nll_loss(output_serialized, reference_serialized, reduction='mean') * batch_size
             total_count += batch_size
         return total_loss / total_count
@@ -246,7 +250,7 @@ class VRNN(pl.LightningModule):
                                                                 step_output.user_lens)
         total_system_decoder_loss = self._compute_decoder_ce_loss(step_output.system_outputs,
                                                                   step_output.system_dials,
-                                                                  step_output.system_lens)
+                                                                  step_output.system_lens, pr=True)
 
         total_usr_nlu_decoder_loss = self._compute_decoder_ce_loss(step_output.usr_nlu_outputs,
                                                                step_output.usr_nlu_dials,
@@ -340,7 +344,8 @@ class VRNN(pl.LightningModule):
         # outputs is an array with what you returned in validation_step for each batch
         # outputs = [{'loss': batch_0_loss}, {'loss': batch_1_loss}, ..., {'loss': batch_n_loss}]
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
-        tensorboard_logs = {k: torch.stack([x[k] for x in outputs]).mean()
+        for o in outputs:
+            tensorboard_logs = {k: torch.stack([x[k] for x in outputs]).mean()
                             for k in outputs[0].keys() if k != 'log'}
         return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
