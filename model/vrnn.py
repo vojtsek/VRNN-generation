@@ -95,7 +95,7 @@ class VRNN(pl.LightningModule):
         p_z_samples_matrix, q_z_samples_matrix = [], []
         bow_logits_list = []
         for bs in batch_sizes:
-            use_prior = self.training and np.random.rand(1) < self.config['z_teacher_forcing_prob']
+            use_prior = not self.training or np.random.rand(1) > self.config['z_teacher_forcing_prob']
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
                                        user_lens_data[offset:offset+bs],
                                        usr_nlu_lens_data[offset:offset+bs],
@@ -109,9 +109,9 @@ class VRNN(pl.LightningModule):
             offset += bs
 
             user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
-            system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.q_z.transpose(1, 0)
+            system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.p_z.transpose(1, 0)
                                                         if use_prior else
-                                                        vae_output.system_turn_output.p_z.transpose(1, 0))
+                                                        vae_output.system_turn_output.q_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
             usr_nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
             system_outputs.append(vae_output.system_turn_output.decoded_outputs[0])
