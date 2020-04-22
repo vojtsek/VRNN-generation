@@ -2,6 +2,8 @@ import torch
 import torch.nn.functional as F
 import numpy as np
 
+from .attention import DotProjectionAttention
+
 torch.manual_seed(0)
 np.random.seed(0)
 
@@ -19,7 +21,7 @@ class RNNDecoder(torch.nn.Module):
         rnn_input_dim = embeddings.embedding_dim + concat_size if concat_size is not None else embeddings.embedding_dim
         self.concat = concat_size is not None
         if use_copy:
-            self.rnn = torch.nn.LSTM(rnn_input_dim + embeddings.embedding_dim, hidden_size, dropout=drop_prob)
+            self.rnn = torch.nn.LSTM(rnn_input_dim + encoder_hidden_size, hidden_size, dropout=drop_prob)
         else:
             self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
         self.bridge = torch.nn.Linear(init_hidden_size, hidden_size)
@@ -30,8 +32,9 @@ class RNNDecoder(torch.nn.Module):
         self.use_copy = use_copy
         self.max_len = max_len
         if use_copy:
-            self.attention_proj = torch.nn.Linear(hidden_size, encoder_hidden_size)
-            self.attn_combine = torch.nn.Linear(2 * embeddings.embedding_dim, rnn_input_dim - concat_size)
+            self.attention = DotProjectionAttention(200, encoder_hidden_size, hidden_size)
+            if concat_size is not None:
+                rnn_input_dim -= concat_size
             self.copy_weights = torch.nn.Linear(encoder_hidden_size, rnn_input_dim)
         else:
             self.copy_weights = None
@@ -51,12 +54,7 @@ class RNNDecoder(torch.nn.Module):
         # update rnn hidden state
         input_tk_embed = self.embeddings(input_tk_idx)
         if self.use_copy:
-            h = self.attention_proj(hidden[0]).squeeze(0).unsqueeze(-1)
-            attn_weights = encoder_hidden_states.transpose(1, 0).contiguous().bmm(h)
-            attn_weights = F.softmax(attn_weights).squeeze(-1).unsqueeze(1)
-                # self.attention_score(torch.cat([input_tk_embed, hidden[0]], dim=-1)), dim=1) \
-                #                .transpose(1, 0)[..., :encoder_hidden_states.shape[0]]
-            attn_applied = torch.bmm(attn_weights, encoder_hidden_states.transpose(1, 0).contiguous()).transpose(1, 0)
+            attn_applied = self.attention(hidden[0].squeeze(0), encoder_hidden_states).transpose(1, 0).contiguous()
             rnn_input = torch.cat([input_tk_embed, attn_applied.contiguous()], dim=-1)
             # rnn_input = self.attn_combine(rnn_input)
 

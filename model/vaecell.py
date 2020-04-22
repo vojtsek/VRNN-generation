@@ -51,8 +51,8 @@ class VAECell(torch.nn.Module):
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       # config['user_z_logits_dim'] +
-                                      config['vrnn_hidden_size'] +
-                                      config['system_z_total_size'],
+                                      # config['vrnn_hidden_size'] +
+                                      config['system_z_total_size'] + config['db_cutoff'] + 1,
                                       # config['input_encoder_hidden_size'] *
                                       # (1 + int(config['bidirectional_encoder'])) +
                                       # config['vrnn_hidden_size'],
@@ -62,14 +62,14 @@ class VAECell(torch.nn.Module):
 
         self.system_dec = RNNDecoder(embeddings,
                                      # config['user_z_logits_dim'] +
-                                     config['vrnn_hidden_size'] +
-                                     config['system_z_total_size'],
+                                     # config['vrnn_hidden_size'] +
+                                     config['system_z_total_size'] + config['db_cutoff'] + 1,
                                      # config['input_encoder_hidden_size'] *
                                      # (1 + int(config['bidirectional_encoder'])) +
                                      # config['vrnn_hidden_size'],
                                      config['system_decoder_hidden_size'],
                                      encoder_hidden_size=self.encoder_hidden_size,
-                                     concat_size=config['db_cutoff'] + 1,
+                                     # concat_size=config['db_cutoff'] + 1,
                                      teacher_prob=config['teacher_forcing_prob'],
                                      drop_prob=config['drop_prob'],
                                      padding_idx=self.vocab.w2id[self.vocab.PAD],
@@ -117,7 +117,7 @@ class VAECell(torch.nn.Module):
 
         if prev_output is not None:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], sampled_latent], dim=1)
+                [sampled_latent, db_res.squeeze(1)], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             # trick, this is actually the user decoder branch

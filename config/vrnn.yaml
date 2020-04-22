@@ -13,12 +13,12 @@ gumbel_softmax_tmp: 2.0
 teacher_forcing_prob: 0.5
 z_teacher_forcing_prob: 0.5
 kl_to_ce: 1
-number_z_vectors: 2
+number_z_vectors: 1
 begin_kl_opt_epoch: 3
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
-use_copynet: false
+use_copynet: true
 with_bpr: false
 with_bow_loss: false
 fake_prior: false
