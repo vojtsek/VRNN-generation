@@ -13,7 +13,7 @@ gumbel_softmax_tmp: 2.0
 teacher_forcing_prob: 0.5
 z_teacher_forcing_prob: 0.5
 kl_to_ce: 1
-number_z_vectors: 1
+number_z_vectors: 5
 begin_kl_opt_epoch: 3
 prior_module_recurrent: false
 gumbel_hard: false

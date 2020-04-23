@@ -72,7 +72,9 @@ class ZSemanticEvaluator(Evaluator):
                         current_turn_type.append('ADDRESS')
                     if 'phone' in line or 'number' in line:
                         current_turn_type.append('PHONE')
-                    if 'thank you' in line or 'bye' in line:
+                    if '<name> is a' in line:
+                        current_turn_type.append('OFFER_REST')
+                    if 'thank you' in line or 'bye' in line or 'welcome' in line:
                         current_turn_type.append('GOODBYE')
                     if 'there are no' in line:
                         current_turn_type.append('NO_MATCH')

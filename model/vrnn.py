@@ -301,7 +301,7 @@ class VRNN(pl.LightningModule):
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
         kl_loss = (system_kl_loss + usr_kl_loss) / 2
         if optimizer_idx == 0:
-            loss = decoder_loss + lambda_usr_kl * usr_kl_loss # + .1 * q_penalty
+            loss = decoder_loss # + lambda_usr_kl * usr_kl_loss # + .1 * q_penalty
         else:
             loss = system_kl_loss + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss

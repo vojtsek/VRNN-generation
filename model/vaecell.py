@@ -34,19 +34,23 @@ class VAECell(torch.nn.Module):
                                                        self.encoder_hidden_size)
                                                   for _ in range(config['number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
-                                   config['user_z_logits_dim'] +
-                                   # self.encoder_hidden_size +
+                                   # config['user_z_logits_dim'] +
+                                   self.encoder_hidden_size +
                                    config['vrnn_hidden_size'],
                                    config['user_decoder_hidden_size'],
+                                   encoder_hidden_size=self.encoder_hidden_size,
                                    teacher_prob=config['teacher_forcing_prob'],
+                                   use_copy=self.config['use_copynet'],
                                    drop_prob=config['drop_prob'])
 
         self.usr_nlu_dec = RNNDecoder(embeddings,
-                                      config['user_z_logits_dim'] +
-                                      # self.encoder_hidden_size +
+                                      # config['user_z_logits_dim'] +
+                                      self.encoder_hidden_size +
                                       config['vrnn_hidden_size'],
                                       config['user_decoder_hidden_size'],
+                                      encoder_hidden_size=self.encoder_hidden_size,
                                       teacher_prob=config['teacher_forcing_prob'],
+                                      use_copy=self.config['use_copynet'],
                                       drop_prob=config['drop_prob'])
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
@@ -120,10 +124,11 @@ class VAECell(torch.nn.Module):
                 [sampled_latent, db_res.squeeze(1)], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
+            copy_encoder_hiddens = encoder_outs
             # trick, this is actually the user decoder branch
             decoder_init_hidden = torch.cat(
                 # [previous_vrnn_hidden[0], sampled_latent], dim=1)
-                [previous_vrnn_hidden[0], sampled_latent], dim=1)
+                [previous_vrnn_hidden[0], last_hidden], dim=1)
         all_decoded_outputs = []
 
         for i, decoder in enumerate(decoders):
@@ -163,7 +168,7 @@ class VAECell(torch.nn.Module):
                                           user_dials.shape[1],
                                           self.config['input_encoder_hidden_size']))
 
-        user_turn_output = self._z_module(user_dials ,
+        user_turn_output = self._z_module(user_dials,
                                           [user_lens, usr_nlu_lens],
                                           encoder_init_state,
                                           previous_vrnn_hidden,
