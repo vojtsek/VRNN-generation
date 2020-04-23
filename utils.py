@@ -46,8 +46,10 @@ def pad_dial(turns, max_dial_len, max_turn_len, pad):
 
 def embed_oh(vec, size):
     vec = vec.unsqueeze(-1).repeat(1, 1, size[-1])
+    src = torch.ones(*size)
     oh = torch.zeros(*size)
-    oh.scatter(1, vec, 2)
+
+    oh.scatter_(2, vec, src)
     return oh
 
 def zero_hidden(sizes):

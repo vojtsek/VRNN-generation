@@ -95,10 +95,15 @@ class VAECell(torch.nn.Module):
         if db_res is not None:
             db_res = embed_oh(db_res, list(db_res.shape) + [self.config['db_cutoff']+1])
         dials = self.embeddings(dials).transpose(1, 0)
+        dials_idx_packed = pack_padded_sequence(dials_idx.transpose(1 ,0), lens[0], enforce_sorted=False)
+        dials_idx, _ = pad_packed_sequence(dials_idx_packed)
+        dials_idx = dials_idx.transpose(1, 0).contiguous()
         dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
         encoder_hidden = (encoder_init_state[0], encoder_init_state[1])
         encoder_outs, last_encoder_hidden = self.embedding_encoder(dials_packed, encoder_hidden)
         encoder_outs, _ = pad_packed_sequence(encoder_outs)
+        if copy_dials_idx is None:
+            copy_dials_idx = dials_idx
         # concat fw+bw
         last_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
         vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
@@ -156,7 +161,7 @@ class VAECell(torch.nn.Module):
                           bow_logits=bow_logits,
                           sampled_z=sampled_latent,
                           last_encoder_hidden=last_hidden,
-                          encoder_hiddens=encoder_outs)
+                          encoder_hiddens=encoder_outs), dials_idx
 
     def forward(self,
                 user_dials, user_lens, usr_nlu_lens, sys_nlu_lens,
@@ -168,28 +173,28 @@ class VAECell(torch.nn.Module):
                                           user_dials.shape[1],
                                           self.config['input_encoder_hidden_size']))
 
-        user_turn_output = self._z_module(user_dials,
-                                          [user_lens, usr_nlu_lens],
-                                          encoder_init_state,
-                                          previous_vrnn_hidden,
-                                          self.user_z_nets,
-                                          [self.user_dec, self.usr_nlu_dec],
-                                          user_z_previous,
-                                          use_prior=False)
+        user_turn_output, user_dials_idx = self._z_module(user_dials,
+                                                          [user_lens, usr_nlu_lens],
+                                                          encoder_init_state,
+                                                          previous_vrnn_hidden,
+                                                          self.user_z_nets,
+                                                          [self.user_dec, self.usr_nlu_dec],
+                                                          user_z_previous,
+                                                          use_prior=False)
 
-        system_turn_output = self._z_module(system_dials,
-                                            [system_lens, sys_nlu_lens],
-                                            encoder_init_state,
-                                            previous_vrnn_hidden,
-                                            self.system_z_nets,
-                                            [self.system_dec, self.sys_nlu_dec],
-                                            system_z_previous,
-                                            db_res=db_res,
-                                            use_prior=use_prior,
-                                            prev_output=user_turn_output,
-                                            copy_dials_idx=user_dials,
-                                            copy_encoder_hiddens=user_turn_output.encoder_hiddens
-                                            )
+        system_turn_output, _ = self._z_module(system_dials,
+                                               [system_lens, sys_nlu_lens],
+                                               encoder_init_state,
+                                               previous_vrnn_hidden,
+                                               self.system_z_nets,
+                                               [self.system_dec, self.sys_nlu_dec],
+                                               system_z_previous,
+                                               db_res=db_res,
+                                               use_prior=use_prior,
+                                               prev_output=user_turn_output,
+                                               copy_dials_idx=user_dials_idx,
+                                               copy_encoder_hiddens=user_turn_output.encoder_hiddens
+                                               )
 
         system_sampled_z = system_turn_output.sampled_z
         encoded_inputs = user_turn_output.last_encoder_hidden
