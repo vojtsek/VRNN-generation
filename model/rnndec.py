@@ -12,8 +12,8 @@ np.random.seed(0)
 class RNNDecoder(torch.nn.Module):
 
     def __init__(self, embeddings, init_hidden_size,
-                 hidden_size, encoder_hidden_size=None, concat_size=None,
-                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False, max_len=1000):
+                 hidden_size, encoder_hidden_size=None, concat_size=None, use_attention=False,
+                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False):
         super(RNNDecoder, self).__init__()
         self.embeddings = embeddings
         self.padding_idx = padding_idx
@@ -21,7 +21,7 @@ class RNNDecoder(torch.nn.Module):
         self.vocab_size = embeddings.num_embeddings
         rnn_input_dim = embeddings.embedding_dim + concat_size if concat_size is not None else embeddings.embedding_dim
         self.concat = concat_size is not None
-        if use_copy:
+        if use_attention:
             self.rnn = torch.nn.LSTM(rnn_input_dim + encoder_hidden_size, hidden_size, dropout=drop_prob)
         else:
             self.rnn = torch.nn.LSTM(rnn_input_dim, hidden_size, dropout=drop_prob)
@@ -31,14 +31,13 @@ class RNNDecoder(torch.nn.Module):
         self.output_projection = torch.nn.Linear(hidden_size, self.vocab_size)
         self.encoder_hidden_size = encoder_hidden_size
         self.use_copy = use_copy
-        self.max_len = max_len
-        if use_copy:
+        self.use_attention = use_attention
+        if self.use_attention:
             self.attention = DotProjectionAttention(200, encoder_hidden_size, hidden_size)
             if concat_size is not None:
                 rnn_input_dim -= concat_size
+        if self.use_copy:
             self.copy_weights = torch.nn.Linear(encoder_hidden_size, hidden_size)
-        else:
-            self.copy_weights = None
         self.teacher_prob = teacher_prob
 
     def forward_step(self,
@@ -53,7 +52,7 @@ class RNNDecoder(torch.nn.Module):
 
         # update rnn hidden state
         input_tk_embed = self.embeddings(input_tk_idx)
-        if self.use_copy:
+        if self.use_attention:
             attn_applied = self.attention(hidden[0].squeeze(0), encoder_hidden_states).transpose(1, 0).contiguous()
             rnn_input = torch.cat([input_tk_embed, attn_applied.contiguous()], dim=-1)
             # rnn_input = self.attn_combine(rnn_input)
@@ -70,23 +69,27 @@ class RNNDecoder(torch.nn.Module):
         output_proba = F.log_softmax(score_gen, dim=2)
         if not self.use_copy:
             return output, hidden, output_proba
-
         else:
             u_copy_score = F.tanh(self.copy_weights(encoder_hidden_states.transpose(0, 1)))  # [B,T,H]
             # stable version of copynet
             u_copy_score = torch.matmul(u_copy_score, output_drop.squeeze(0).unsqueeze(2)).squeeze(2)
-            u_copy_score_max = torch.max(u_copy_score, dim=1, keepdim=True)[0]
+            u_copy_score_max, _ = torch.max(u_copy_score, dim=1, keepdim=True)
             u_copy_score = torch.exp(u_copy_score - u_copy_score_max)  # [B,T]
-            encoder_idxs_emb = embed_oh(encoder_idxs, list(encoder_idxs.shape) + [self.vocab_size + 1])
-            u_copy_score = torch.log(
-                torch.bmm(u_copy_score.unsqueeze(1), encoder_idxs_emb)).squeeze(1) + u_copy_score_max  # [B,V]
-            # u_copy_score = self.inp_dropout(u_copy_score)
-            score_gen = F.log_softmax(score_gen, dim=1)
-            u_copy_score = F.log_softmax(u_copy_score, dim=1)
+            encoder_idxs_emb = embed_oh(encoder_idxs, list(encoder_idxs.shape) + [self.vocab_size ])
+            u_copy_score =\
+                torch.bmm(u_copy_score.unsqueeze(1), encoder_idxs_emb).squeeze(1) + u_copy_score_max  # [B,V]
+            scores = F.softmax(torch.cat([score_gen.squeeze(0), u_copy_score], dim=1), dim=1)
+            score_gen, u_copy_score = scores[:, :self.vocab_size], \
+                                      scores[:, self.vocab_size:]
             output_proba = score_gen + u_copy_score[:, :self.vocab_size]  # [B,V]
-            # proba = torch.cat([proba, u_copy_score[:, self.vocab_size:]], 1)
+            gen = torch.argmax(score_gen, dim=-1).numpy()
+            cpy = torch.argmax(output_proba, dim=-1).numpy()
+            # if any([g != c for g, c in zip(gen, cpy)]):
+            #     print('COPY WINS', gen, cpy, torch.argmax(u_copy_score[:, :self.vocab_size], dim=-1).numpy())
+            # else:
+            #     print('GEN WINS')
 
-        return output, hidden, output_proba
+        return output, hidden, torch.log(output_proba).unsqueeze(0)
 
     def forward(self, trg_embed, init_hidden, to_concat=None, max_len=None, encoder_hidden_states=None, encoder_idxs=None):
         """Unroll the decoder one step at a time."""

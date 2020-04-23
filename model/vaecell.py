@@ -41,6 +41,7 @@ class VAECell(torch.nn.Module):
                                    encoder_hidden_size=self.encoder_hidden_size,
                                    teacher_prob=config['teacher_forcing_prob'],
                                    use_copy=self.config['use_copynet'],
+                                   use_attention=self.config['use_attention'],
                                    drop_prob=config['drop_prob'])
 
         self.usr_nlu_dec = RNNDecoder(embeddings,
@@ -51,6 +52,7 @@ class VAECell(torch.nn.Module):
                                       encoder_hidden_size=self.encoder_hidden_size,
                                       teacher_prob=config['teacher_forcing_prob'],
                                       use_copy=self.config['use_copynet'],
+                                      use_attention=self.config['use_attention'],
                                       drop_prob=config['drop_prob'])
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
@@ -79,7 +81,7 @@ class VAECell(torch.nn.Module):
                                      padding_idx=self.vocab.w2id[self.vocab.PAD],
                                      bos_idx=self.vocab.w2id[self.vocab.BOS],
                                      use_copy=self.config['use_copynet'],
-                                     max_len=60)
+                                     use_attention=self.config['use_attention'])
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[None, torch.relu],
