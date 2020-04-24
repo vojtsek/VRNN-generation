@@ -86,13 +86,14 @@ class VRNN(pl.LightningModule):
 
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
-        user_z_previous = zero_hidden((self.config['batch_size'], self.config['user_z_logits_dim']))
+        user_z_previous = zero_hidden((self.config['batch_size'], self.config['user_z_total_size']))
         system_z_previous = zero_hidden((self.config['batch_size'], self.config['system_z_total_size']))
         user_outputs, system_outputs = [], []
         usr_nlu_outputs, sys_nlu_outputs = [], []
         user_q_zs, user_p_zs, z_samples = [], [], []
         system_q_zs, system_p_zs = [], []
         p_z_samples_matrix, q_z_samples_matrix = [], []
+        user_z_samples_matrix = []
         bow_logits_list = []
         for bs in batch_sizes:
             use_prior = not self.training or np.random.rand(1) > self.config['z_teacher_forcing_prob']
@@ -120,6 +121,7 @@ class VRNN(pl.LightningModule):
             user_p_zs.extend(vae_output.user_turn_output.p_z)
             p_z_samples_matrix.extend(vae_output.system_turn_output.p_z_samples_lst)
             q_z_samples_matrix.extend(vae_output.system_turn_output.q_z_samples_lst)
+            user_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
             system_q_zs.extend(vae_output.system_turn_output.q_z)
             system_p_zs.extend(vae_output.system_turn_output.p_z)
             if self.config['with_bow_loss']:
@@ -152,7 +154,8 @@ class VRNN(pl.LightningModule):
                               z_samples=_pad_packed(z_samples),
                               bow_logits=_pad_packed(bow_logits_list) if self.config['with_bow_loss'] else None,
                               p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
-                              q_z_samples_matrix=_pad_packed(q_z_samples_matrix))
+                              q_z_samples_matrix=_pad_packed(q_z_samples_matrix),
+                              user_z_samples_matrix=_pad_packed(user_z_samples_matrix))
 
     def _compute_decoder_ce_loss(self, outputs, reference, output_lens, pr=False):
         total_loss = 0
@@ -277,7 +280,7 @@ class VRNN(pl.LightningModule):
             usr_kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
         else:
             # KL loss between q_z and p_z
-            usr_kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
+            usr_kl_loss, q_penalty, p_penalty = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
         if self.config['system_z_type'] == 'cont':
             system_kl_loss = self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
@@ -392,6 +395,7 @@ class VRNN(pl.LightningModule):
         all_samples = torch.argmax(step_output.z_samples, dim=2).numpy()
         all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).numpy()
         all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).numpy()
+        all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).numpy()
         return PredictedOuputs(all_user_predictions,
                                all_user_gt,
                                all_system_predictions,
@@ -402,7 +406,8 @@ class VRNN(pl.LightningModule):
                                all_sys_nlu_gt,
                                all_samples,
                                all_p_samples_matrix,
-                               all_q_samples_matrix)
+                               all_q_samples_matrix,
+                               all_user_samples_matrix)
 
     def configure_optimizers(self):
         prior_parameters = []
@@ -435,7 +440,7 @@ class VRNN(pl.LightningModule):
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
         if optimizer_i == 0 and not self.config['retraining'] and \
-            self.epoch_number % self.config['kl_to_ce'] == 0:
+                self.epoch_number % self.config['kl_to_ce'] == 0:
             optimizer.step()
             optimizer.zero_grad()
         #
@@ -493,7 +498,8 @@ class VRNNStepOutput:
                  z_samples=None,
                  bow_logits=None,
                  p_z_samples_matrix=None,
-                 q_z_samples_matrix=None):
+                 q_z_samples_matrix=None,
+                 user_z_samples_matrix=None):
         self.user_dials = user_dials
         self.user_outputs = user_outputs
         self.user_lens = user_lens
@@ -514,6 +520,7 @@ class VRNNStepOutput:
         self.bow_logits = bow_logits
         self.p_z_samples_matrix = p_z_samples_matrix
         self.q_z_samples_matrix = q_z_samples_matrix
+        self.user_z_samples_matrix = user_z_samples_matrix
 
 
 class PredictedOuputs:
@@ -528,7 +535,8 @@ class PredictedOuputs:
                  all_sys_nlu_gt=None,
                  all_z_samples=None,
                  all_p_z_samples_matrix=None,
-                 all_q_z_samples_matrix=None
+                 all_q_z_samples_matrix=None,
+                 all_user_z_samples_matrix=None
                  ):
         self.all_user_predictions = all_user_predictions
         self.all_user_gt = all_user_gt
@@ -541,3 +549,4 @@ class PredictedOuputs:
         self.all_z_samples = all_z_samples
         self.all_p_z_samples_matrix = all_p_z_samples_matrix
         self.all_q_z_samples_matrix = all_q_z_samples_matrix
+        self.all_user_z_samples_matrix = all_user_z_samples_matrix

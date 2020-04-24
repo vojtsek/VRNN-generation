@@ -9,11 +9,12 @@ torch.manual_seed(0)
 
 class ZNet(torch.nn.Module):
 
-    def __init__(self, config, z_type, z_logits_dim, cond_z_logits_dim):
+    def __init__(self, config, z_type, z_logits_dim, cond_z_logits_dim, fake_prior):
         super(ZNet, self).__init__()
         self.config = config
         self.z_logits_dim = z_logits_dim
         self.z_type = z_type
+        self.fake_prior = fake_prior
         z_input_size = config['encoder_hidden_total_size'] +\
                        config['vrnn_hidden_size']
         self.posterior_net1 = FFNet(z_input_size,
@@ -87,7 +88,7 @@ class ZNet(torch.nn.Module):
             # print('p', torch.argmax(p_z, dim=-1))
             # print('kl', kl)
             # print('meankl', torch.mean(kl))
-        if self.config['fake_prior']:
+        if self.fake_prior:
             p_z_samples = q_z_samples
             p_z = q_z
 

@@ -77,6 +77,7 @@ def main(flags):
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
 
     config['system_z_total_size'] = config['system_z_logits_dim'] * config['number_z_vectors']
+    config['user_z_total_size'] = config['user_z_logits_dim'] * config['number_z_vectors']
     config['encoder_hidden_total_size'] = config['input_encoder_hidden_size'] * (1 + config['bidirectional_encoder'])
     if flags.model_path is not None:
         checkpoint = torch.load(flags.model_path)
@@ -123,7 +124,8 @@ def run_evaluation(output_dir, model, dataset):
             open(os.path.join(output_dir, 'nlu_out.txt'), 'wt') as nlu_fd, \
             open(os.path.join(output_dir, 'nlu_ground_truth.txt'), 'wt') as nlu_gt_fd, \
             open(os.path.join(output_dir, 'z_posterior.txt'), 'wt') as z_post_fd, \
-            open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd:
+            open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd, \
+            open(os.path.join(output_dir, 'z_user.txt'), 'wt') as z_user_fd:
 
         for d, val_batch in enumerate(loader):
             predictions = model.predict(val_batch)
@@ -133,17 +135,18 @@ def run_evaluation(output_dir, model, dataset):
             print(f'Dialogue {d+1}', file=all_fd)
             for i in range(len(predictions.all_user_predictions)):
                 print(f'\tTurn {i+1}', file=all_fd)
-                print(f'\t{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
+                print(f'\tUSER HYP:{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_usr_nlu_predictions[i])}', file=all_fd)
                 print(f'\tSYS HYP:{" ".join(predictions.all_system_predictions[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_sys_nlu_predictions[i])}', file=all_fd)
                 print(f'\tORIG:', file=all_fd)
-                print(f'\t{" ".join(predictions.all_user_gt[i])}', file=all_fd)
+                print(f'\tUSER GT{" ".join(predictions.all_user_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_usr_nlu_gt[i])}', file=all_fd)
                 print(f'\tSYS GT:{" ".join(predictions.all_system_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_sys_nlu_gt[i])}', file=all_fd)
                 print(f'\tprior Z: {" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]])}', file=all_fd)
                 print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
+                print(f'\tuser Z: {" ".join([str(z) for z in predictions.all_user_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
 
                 print(" ".join(predictions.all_user_predictions[i]), file=user_fd)
@@ -154,6 +157,7 @@ def run_evaluation(output_dir, model, dataset):
                 print(" ".join(predictions.all_usr_nlu_gt[i]), file=nlu_gt_fd)
                 print(" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]]), file=z_post_fd)
                 print(" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]]), file=z_prior_fd)
+                print(" ".join([str(z) for z in predictions.all_user_z_samples_matrix[i][0]]), file=z_user_fd)
 
             print('', file=user_fd)
             print('', file=system_fd)

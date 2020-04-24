@@ -4,7 +4,7 @@ data_dir: 'VRNN/data/camrest'
 domain: 'camrest'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.vec'
+embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
 # general settings
 batch_size: 8
 drop_prob: 0.7
@@ -50,7 +50,7 @@ prior_ff_sizes:
   - 50
 bow_layer_size: 400
 # latent z config
-user_z_type: 'cont' # cont| gumbel;
+user_z_type: 'gumbel' # cont| gumbel;
 system_z_type: 'gumbel'
-user_z_logits_dim: 150
+user_z_logits_dim: 30
 system_z_logits_dim: 20

@@ -45,9 +45,12 @@ class ZSemanticEvaluator(Evaluator):
         with open(os.path.join(directory, f'output_all.txt'), 'rt') as in_fd:
             current_turn_number = None
             current_turn_type = []
+            slot_map = dict()
             prior_z_vector = None
             posterior_z_vector = None
+            relative_line = 1
             records = []
+            current_nlu_line = ''
             for line in in_fd:
                 if '--' in line:
                     records.append(TurnRecord(current_turn_number,
@@ -67,25 +70,48 @@ class ZSemanticEvaluator(Evaluator):
                 if 'post Z:' in line:
                     line = line.split()
                     posterior_z_vector = [int(n) for n in line[2:]]
-                if 'SYS HYP:' in line:
-                    if 'address' in line:
-                        current_turn_type.append('ADDRESS')
-                    if 'phone' in line or 'number' in line:
-                        current_turn_type.append('PHONE')
-                    if '<name> is a' in line:
-                        current_turn_type.append('OFFER_REST')
-                    if 'thank you' in line or 'bye' in line or 'welcome' in line:
-                        current_turn_type.append('GOODBYE')
-                    if 'there are no' in line:
-                        current_turn_type.append('NO_MATCH')
+                # if 'user Z:' in line:
+                #     line = line.split()
+                #     posterior_z_vector = [int(n) for n in line[2:]]
 
-        records = sorted(records, key=lambda r: r.turn_type)
-        for t_tpe, records in groupby(records, key=lambda r: r.turn_type):
-            print(t_tpe)
-            t_counter = Counter()
-            for record in records:
-                t_counter.update([','.join([str(i) for i in record.prior_z_vector])])
-            print(t_counter)
+                if role == 'system':
+                    if 'SYS HYP:' in line:
+                        if 'address' in line:
+                            current_turn_type.append('ADDRESS')
+                        if 'phone' in line or 'number' in line:
+                            current_turn_type.append('PHONE')
+                        if '<name> is a' in line:
+                            current_turn_type.append('OFFER_REST')
+                        if 'thank you' in line or 'bye' in line or 'welcome' in line:
+                            current_turn_type.append('GOODBYE')
+                        if 'there are no' in line:
+                            current_turn_type.append('NO_MATCH')
+                else:
+                    if 'Turn' in line:
+                        relative_line = 0
+                    if relative_line == 2:
+                        current_nlu_line = line
+                    if 'user Z' in line:
+                        line = line.split()
+                        z_vector = [int(n) for n in line[2:]]
+                        for val in current_nlu_line.split():
+                            if val not in ['<BOS>', '<EOS>']:
+                                if val not in slot_map:
+                                    slot_map[val] = Counter()
+                                slot_map[val].update([' '.join([str(z) for z in z_vector])])
+                relative_line += 1
+
+        if role == 'system':
+            records = sorted(records, key=lambda r: r.turn_type)
+            for t_tpe, records in groupby(records, key=lambda r: r.turn_type):
+                print(t_tpe)
+                t_counter = Counter()
+                for record in records:
+                    t_counter.update([','.join([str(i) for i in record.prior_z_vector])])
+                print(t_counter.most_common(3))
+        else:
+            for val, zs in slot_map.items():
+                print(val, zs.most_common(5))
 
 
 def main(args):
