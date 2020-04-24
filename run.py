@@ -39,7 +39,10 @@ def main(flags):
             reader = CamRestReader()
         elif config['domain'] == 'woz-hotel':
             reader = MultiWOZReader(['hotel'])
-        data_reader = DataReader(data=data, reader=reader, delexicalizer=delexicalizer)
+        data_reader = DataReader(data=data,
+                                 reader=reader,
+                                 delexicalizer=delexicalizer,
+                                 db_file=os.path.join(config['data_dir'], 'db.json'))
     else:
         data_reader = DataReader(saved_dialogues=config['data_fn'])
 

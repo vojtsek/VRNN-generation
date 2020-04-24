@@ -38,8 +38,8 @@ class Delexicalizer:
     def _replace_db(self, utt):
         for entity in self.db:
             for attribute, val in entity.items():
-                # if attribute in ['area', 'food', 'pricerange']:
-                #     continue
+                if attribute in ['area', 'food', 'pricerange']:
+                    continue
                 val = val.lower()
                 if val in utt:
                     self.found_tags.append(self._make_tag(attribute))

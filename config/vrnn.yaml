@@ -4,7 +4,7 @@ data_dir: 'VRNN/data/camrest'
 domain: 'camrest'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
+embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.vec'
 # general settings
 batch_size: 8
 drop_prob: 0.7

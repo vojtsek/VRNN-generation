@@ -15,7 +15,7 @@ class JSONDb:
     def search(self, **query):
         results = []
         for entry in self.data:
-            match = all([col in entry and entry[col] == val for col, val in query])
+            match = all([col in entry and entry[col] == val for col, val in query.items()])
             if match:
                 results.append(entry)
         return results
@@ -69,9 +69,8 @@ class DataReader:
                 self.all_words.update([s.val for s in t.usr_slu])
 
                 if self.db is not None:
-                    query = {s.slot: s.val for s in t.usr_slu}
+                    query = {s.name: s.val for s in t.usr_slu}
                     db_result = self.db.search(**query)
-                    print(db_result)
                     t.db_len = len(db_result)
                 else:
                     t.db_len = 0
