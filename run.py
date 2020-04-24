@@ -116,7 +116,7 @@ class EvaluationCb(pl.Callback):
 def run_evaluation(output_dir, model, dataset):
     model.eval()
     loader = TorchDataLoader(dataset, batch_size=1, shuffle=True)
-    with open(os.path.join(output_dir, 'output_all.txt'), 'wt') as all_fd, \
+    with open(os.path.join(output_dir, f'output_all_{model.epoch_number}.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \
             open(os.path.join(output_dir, 'user_out.txt'), 'wt') as user_fd, \

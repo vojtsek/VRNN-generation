@@ -76,8 +76,8 @@ class RNNDecoder(torch.nn.Module):
             u_copy_score_max, _ = torch.max(u_copy_score, dim=1, keepdim=True)
             u_copy_score = torch.exp(u_copy_score - u_copy_score_max)  # [B,T]
             encoder_idxs_emb = embed_oh(encoder_idxs, list(encoder_idxs.shape) + [self.vocab_size ])
-            u_copy_score =\
-                torch.bmm(u_copy_score.unsqueeze(1), encoder_idxs_emb).squeeze(1) + u_copy_score_max  # [B,V]
+            u_copy_score = torch.log(
+                torch.bmm(u_copy_score.unsqueeze(1), encoder_idxs_emb).squeeze(1) + 1e-35) + u_copy_score_max  # [B,V]
             scores = F.softmax(torch.cat([score_gen.squeeze(0), u_copy_score], dim=1), dim=1)
             score_gen, u_copy_score = scores[:, :self.vocab_size], \
                                       scores[:, self.vocab_size:]

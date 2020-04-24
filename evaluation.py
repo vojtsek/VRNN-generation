@@ -1,5 +1,6 @@
 import argparse
 import os
+import copy
 from itertools import groupby
 from collections import Counter
 from abc import ABC
@@ -66,10 +67,10 @@ class ZSemanticEvaluator(Evaluator):
                     current_turn_number = int(line[1])
                 if 'prior Z:' in line:
                     line = line.split()
-                    prior_z_vector = [int(n) for n in line[2:]]
+                    prior_z_vector = [(i, int(n)) for i, n in enumerate(line[2:])]
                 if 'post Z:' in line:
                     line = line.split()
-                    posterior_z_vector = [int(n) for n in line[2:]]
+                    posterior_z_vector = [(i, int(n)) for i, n in enumerate(line[2:])]
                 # if 'user Z:' in line:
                 #     line = line.split()
                 #     posterior_z_vector = [int(n) for n in line[2:]]
@@ -80,7 +81,8 @@ class ZSemanticEvaluator(Evaluator):
                             current_turn_type.append('ADDRESS')
                         if 'phone' in line or 'number' in line:
                             current_turn_type.append('PHONE')
-                        if '<name> is a' in line:
+                        if '<name> is a' in line or \
+                                '<name> is located' in line:
                             current_turn_type.append('OFFER_REST')
                         if 'thank you' in line or 'bye' in line or 'welcome' in line:
                             current_turn_type.append('GOODBYE')
@@ -104,11 +106,12 @@ class ZSemanticEvaluator(Evaluator):
         if role == 'system':
             records = sorted(records, key=lambda r: r.turn_type)
             for t_tpe, records in groupby(records, key=lambda r: r.turn_type):
-                print(t_tpe)
+                r = copy.deepcopy(records)
+                print(t_tpe, len(list(r)))
                 t_counter = Counter()
                 for record in records:
-                    t_counter.update([','.join([str(i) for i in record.prior_z_vector])])
-                print(t_counter.most_common(3))
+                    t_counter.update([str(i) for i in record.prior_z_vector])
+                print(t_counter.most_common(5))
         else:
             for val, zs in slot_map.items():
                 print(val, zs.most_common(5))
