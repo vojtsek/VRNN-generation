@@ -60,7 +60,7 @@ class VAECell(torch.nn.Module):
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       config['user_z_total_size'] +
-                                      # config['vrnn_hidden_size'] +
+                                      config['vrnn_hidden_size'] +
                                       config['system_z_total_size'] + config['db_cutoff'] + 1,
                                       # config['input_encoder_hidden_size'] *
                                       # (1 + int(config['bidirectional_encoder'])) +
@@ -71,7 +71,7 @@ class VAECell(torch.nn.Module):
 
         self.system_dec = RNNDecoder(embeddings,
                                      config['user_z_total_size'] +
-                                     # config['vrnn_hidden_size'] +
+                                     config['vrnn_hidden_size'] +
                                      config['system_z_total_size'] + config['db_cutoff'] + 1,
                                      # config['input_encoder_hidden_size'] *
                                      # (1 + int(config['bidirectional_encoder'])) +
@@ -131,7 +131,7 @@ class VAECell(torch.nn.Module):
 
         if prev_output is not None:
             decoder_init_hidden = torch.cat(
-                [prev_output.sampled_z, sampled_latent, db_res.squeeze(1)], dim=1)
+                [previous_vrnn_hidden[0], prev_output.sampled_z, sampled_latent, db_res.squeeze(1)], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             copy_encoder_hiddens = encoder_outs

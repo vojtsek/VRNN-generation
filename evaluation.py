@@ -43,7 +43,7 @@ class ZSemanticEvaluator(Evaluator):
         self.bleu_score = 0
 
     def eval_from_dir(self, directory, role=None):
-        with open(os.path.join(directory, f'output_all.txt'), 'rt') as in_fd:
+        with open(os.path.join(directory, f'output_all_33.txt'), 'rt') as in_fd:
             current_turn_number = None
             current_turn_type = []
             slot_map = dict()
