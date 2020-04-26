@@ -5,6 +5,11 @@ from itertools import groupby
 from collections import Counter
 from abc import ABC
 
+import numpy as np
+from sklearn import tree
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+import matplotlib.pyplot as plt
 import bleu
 
 
@@ -43,7 +48,7 @@ class ZSemanticEvaluator(Evaluator):
         self.bleu_score = 0
 
     def eval_from_dir(self, directory, role=None):
-        with open(os.path.join(directory, f'output_all_33.txt'), 'rt') as in_fd:
+        with open(os.path.join(directory, f'output_all_18.txt'), 'rt') as in_fd:
             current_turn_number = None
             current_turn_type = []
             slot_map = dict()
@@ -88,6 +93,8 @@ class ZSemanticEvaluator(Evaluator):
                             current_turn_type.append('GOODBYE')
                         if 'there are no' in line:
                             current_turn_type.append('NO_MATCH')
+                        if len(current_turn_type) == 0:
+                            current_turn_type.append('OTHER')
                 else:
                     if 'Turn' in line:
                         relative_line = 0
@@ -104,14 +111,48 @@ class ZSemanticEvaluator(Evaluator):
                 relative_line += 1
 
         if role == 'system':
+            def _oh(idx, size):
+                oh = [0] * size
+                oh[idx] = 1
+                return oh
+
+            dt_clf = tree.DecisionTreeClassifier(max_depth=10, criterion='gini')
+            rf_clf = RandomForestClassifier()
+            X = []
+            y = []
+            classes = []
             records = sorted(records, key=lambda r: r.turn_type)
-            for t_tpe, records in groupby(records, key=lambda r: r.turn_type):
+            for cls, (t_tpe, records) in enumerate(groupby(records, key=lambda r: r.turn_type)):
                 r = copy.deepcopy(records)
                 print(t_tpe, len(list(r)))
+                classes.append(t_tpe)
                 t_counter = Counter()
                 for record in records:
+                    # X.append([i[1] for i in record.prior_z_vector])
+                    d = []
+                    for i in record.prior_z_vector:
+                        d.extend(_oh(i[1], 20))
+                    X.append(d)
+                    y.append(t_tpe)
                     t_counter.update([str(i) for i in record.prior_z_vector])
                 print(t_counter.most_common(5))
+            dt_clf.fit(X, y)
+            rf_clf.fit(X, y)
+            y_hat = dt_clf.predict(X)
+            y_hat_rf = rf_clf.predict(X)
+            acc = accuracy_score(y, y_hat)
+
+            print('DT accuracy:', acc)
+            fig = plt.gcf()
+            fig.set_size_inches(15, 9)
+            tree.plot_tree(dt_clf,
+                           filled=True,
+                           label='none',
+                           proportion=True,
+                           max_depth=8,
+                           class_names=classes,
+                           fontsize=10)
+            plt.savefig(os.path.join(directory, f'dt.png'), format='png', bbox_inches="tight")
         else:
             for val, zs in slot_map.items():
                 print(val, zs.most_common(5))
