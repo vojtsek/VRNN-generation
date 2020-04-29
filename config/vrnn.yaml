@@ -19,7 +19,7 @@ prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
 use_copynet: true
-use_attention: false
+use_attention: true
 with_bpr: false
 with_bow_loss: false
 fake_prior: false

@@ -94,6 +94,7 @@ class VRNN(pl.LightningModule):
         system_q_zs, system_p_zs = [], []
         p_z_samples_matrix, q_z_samples_matrix = [], []
         user_z_samples_matrix = []
+        db_data = []
         bow_logits_list = []
         for bs in batch_sizes:
             use_prior = not self.training or np.random.rand(1) > self.config['z_teacher_forcing_prob']
@@ -107,6 +108,7 @@ class VRNN(pl.LightningModule):
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        user_z_previous[:bs], system_z_previous[:bs],
                                        use_prior)
+            db_data.append(db_res_data[offset:offset+bs])
             offset += bs
 
             user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
@@ -155,7 +157,8 @@ class VRNN(pl.LightningModule):
                               bow_logits=_pad_packed(bow_logits_list) if self.config['with_bow_loss'] else None,
                               p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
                               q_z_samples_matrix=_pad_packed(q_z_samples_matrix),
-                              user_z_samples_matrix=_pad_packed(user_z_samples_matrix))
+                              user_z_samples_matrix=_pad_packed(user_z_samples_matrix),
+                              db_data=db_data)
 
     def _compute_decoder_ce_loss(self, outputs, reference, output_lens, pr=False):
         total_loss = 0
@@ -407,7 +410,8 @@ class VRNN(pl.LightningModule):
                                all_samples,
                                all_p_samples_matrix,
                                all_q_samples_matrix,
-                               all_user_samples_matrix)
+                               all_user_samples_matrix,
+                               step_output.db_data)
 
     def configure_optimizers(self):
         prior_parameters = []
@@ -499,7 +503,8 @@ class VRNNStepOutput:
                  bow_logits=None,
                  p_z_samples_matrix=None,
                  q_z_samples_matrix=None,
-                 user_z_samples_matrix=None):
+                 user_z_samples_matrix=None,
+                 db_data=None):
         self.user_dials = user_dials
         self.user_outputs = user_outputs
         self.user_lens = user_lens
@@ -518,6 +523,7 @@ class VRNNStepOutput:
         self.system_p_zs = system_p_zs
         self.z_samples = z_samples
         self.bow_logits = bow_logits
+        self.db_data = db_data
         self.p_z_samples_matrix = p_z_samples_matrix
         self.q_z_samples_matrix = q_z_samples_matrix
         self.user_z_samples_matrix = user_z_samples_matrix
@@ -536,8 +542,8 @@ class PredictedOuputs:
                  all_z_samples=None,
                  all_p_z_samples_matrix=None,
                  all_q_z_samples_matrix=None,
-                 all_user_z_samples_matrix=None
-                 ):
+                 all_user_z_samples_matrix=None,
+                 db_data=None):
         self.all_user_predictions = all_user_predictions
         self.all_user_gt = all_user_gt
         self.all_system_predictions = all_system_predictions
@@ -550,3 +556,4 @@ class PredictedOuputs:
         self.all_p_z_samples_matrix = all_p_z_samples_matrix
         self.all_q_z_samples_matrix = all_q_z_samples_matrix
         self.all_user_z_samples_matrix = all_user_z_samples_matrix
+        self.db_data = db_data

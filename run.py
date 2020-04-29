@@ -147,6 +147,7 @@ def run_evaluation(output_dir, model, dataset):
                 print(f'\tprior Z: {" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]])}', file=all_fd)
                 print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
                 print(f'\tuser Z: {" ".join([str(z) for z in predictions.all_user_z_samples_matrix[i][0]])}', file=all_fd)
+                print(f'\tdb: {predictions.db_data[i][0].item()}', file=all_fd)
                 print('-' * 80, file=all_fd)
 
                 print(" ".join(predictions.all_user_predictions[i]), file=user_fd)

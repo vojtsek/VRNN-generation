@@ -13,9 +13,13 @@ class JSONDb:
             self.data = json.load(fd)
 
     def search(self, **query):
+        if 'slot' in query:
+            del query['slot']
+
         results = []
         for entry in self.data:
-            match = all([col in entry and entry[col] == val for col, val in query.items()])
+            match = all([col in entry and entry[col] == val for col, val in query.items()
+                         if col not in ['slot'] and val != 'dontcare'])
             if match:
                 results.append(entry)
         return results
@@ -63,14 +67,16 @@ class DataReader:
                 continue
 
             self._dialogues.append(d)
+            state = {}
             for t in d.turns:
                 self.all_words.update(t.user)
                 self.all_words.update(t.system)
                 self.all_words.update([s.val for s in t.usr_slu])
 
                 if self.db is not None:
-                    query = {s.name: s.val for s in t.usr_slu}
-                    db_result = self.db.search(**query)
+                    for s in t.usr_slu:
+                        state[s.name] = s.val
+                    db_result = self.db.search(**state)
                     t.db_len = len(db_result)
                 else:
                     t.db_len = 0

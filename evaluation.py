@@ -48,7 +48,7 @@ class ZSemanticEvaluator(Evaluator):
         self.bleu_score = 0
 
     def eval_from_dir(self, directory, role=None):
-        with open(os.path.join(directory, f'output_all_18.txt'), 'rt') as in_fd:
+        with open(os.path.join(directory, f'output_all_22.txt'), 'rt') as in_fd:
             current_turn_number = None
             current_turn_type = []
             slot_map = dict()
@@ -82,9 +82,7 @@ class ZSemanticEvaluator(Evaluator):
 
                 if role == 'system':
                     if 'SYS HYP:' in line:
-                        if 'address' in line:
-                            current_turn_type.append('ADDRESS')
-                        if 'phone' in line or 'number' in line:
+                        if 'address' or 'phone' in line or 'number' in line:
                             current_turn_type.append('PHONE')
                         if '<name> is a' in line or \
                                 '<name> is located' in line:
@@ -116,7 +114,7 @@ class ZSemanticEvaluator(Evaluator):
                 oh[idx] = 1
                 return oh
 
-            dt_clf = tree.DecisionTreeClassifier(max_depth=10, criterion='gini')
+            dt_clf = tree.DecisionTreeClassifier(max_depth=7, criterion='gini')
             rf_clf = RandomForestClassifier()
             X = []
             y = []

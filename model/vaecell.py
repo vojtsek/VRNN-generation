@@ -78,7 +78,7 @@ class VAECell(torch.nn.Module):
                                      # config['vrnn_hidden_size'],
                                      config['system_decoder_hidden_size'],
                                      encoder_hidden_size=self.encoder_hidden_size,
-                                     # concat_size=config['db_cutoff'] + 1,
+                                     concat_size=config['db_cutoff'] + 1,
                                      teacher_prob=config['teacher_forcing_prob'],
                                      drop_prob=config['drop_prob'],
                                      padding_idx=self.vocab.w2id[self.vocab.PAD],
