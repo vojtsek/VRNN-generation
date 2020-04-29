@@ -1,7 +1,9 @@
 # data settings
 data_type: 'raw'
-data_dir: 'VRNN/data/camrest'
-domain: 'camrest'
+#data_dir: 'VRNN/data/camrest'
+#domain: 'camrest'
+data_dir: 'VRNN/data/SMD'
+domain: 'smd'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'

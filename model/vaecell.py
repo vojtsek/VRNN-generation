@@ -100,7 +100,7 @@ class VAECell(torch.nn.Module):
         if db_res is not None:
             db_res = embed_oh(db_res, list(db_res.shape) + [self.config['db_cutoff']+1])
         dials = self.embeddings(dials).transpose(1, 0)
-        dials_idx_packed = pack_padded_sequence(dials_idx.transpose(1 ,0), lens[0], enforce_sorted=False)
+        dials_idx_packed = pack_padded_sequence(dials_idx.transpose(1, 0), lens[0], enforce_sorted=False)
         dials_idx, _ = pad_packed_sequence(dials_idx_packed)
         dials_idx = dials_idx.transpose(1, 0).contiguous()
         dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)

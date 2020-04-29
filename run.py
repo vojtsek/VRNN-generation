@@ -16,7 +16,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
 from git import Repo
 
-from .dataset import DataReader, CamRestReader, MultiWOZReader,\
+from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 
 from .model import VRNN, EpochEndCb, checkpoint_callback
@@ -32,19 +32,24 @@ def main(flags):
         config = yaml.load(in_fd, Loader=yaml.FullLoader)
 
     delexicalizer = Delexicalizer(config['data_dir'])
-    if config['data_type'] == 'raw':
-        with open(os.path.join(config['data_dir'], 'data.json'), 'rt') as in_fd:
+
+    sets = ['test', 'train', 'valid']
+    readers = {}
+    if config['domain'] == 'camrest':
+        reader = CamRestReader()
+    elif config['domain'] == 'woz-hotel':
+        reader = MultiWOZReader(['hotel'])
+    elif config['domain'] == 'smd':
+        reader = SMDReader()
+    for data_set in sets:
+        with open(os.path.join(config['data_dir'], f'{data_set}.json'), 'rt') as in_fd:
             data = json.load(in_fd)
-        if config['domain'] == 'camrest':
-            reader = CamRestReader()
-        elif config['domain'] == 'woz-hotel':
-            reader = MultiWOZReader(['hotel'])
-        data_reader = DataReader(data=data,
-                                 reader=reader,
-                                 delexicalizer=delexicalizer,
-                                 db_file=os.path.join(config['data_dir'], 'db.json'))
-    else:
-        data_reader = DataReader(saved_dialogues=config['data_fn'])
+
+        readers[data_set] = DataReader(data=data,
+                                       reader=reader,
+                                       delexicalizer=delexicalizer,
+                                       db_file=os.path.join(config['data_dir'], 'db.json'),
+                                       train=1, valid=0)
 
     if args.output_dir is None:
         print('Output directory not provided, exiting.')
@@ -61,17 +66,19 @@ def main(flags):
 
     embeddings = Embeddings(config['embedding_fn'],
                             out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
-                            extern_vocab=[w for w, _ in data_reader.all_words.most_common(2500)])
-    # embeddings.add_tokens_rnd(delexicalizer.all_tags)
+                            extern_vocab=[w for w, _ in (readers['train'].all_words.most_common(5000) +\
+                                                         readers['valid'].all_words.most_common(5000))])
+    embeddings.add_tokens_rnd(delexicalizer.all_tags)
     composed_transforms = TorchCompose([WordToInt(embeddings, config['db_cutoff']),
                                         Padding(embeddings.w2id[Embeddings.PAD],
-                                                data_reader.max_dial_len,
-                                                data_reader.max_turn_len + 2,
-                                                data_reader.max_slu_len + 2),  # +2 for <BOS>,<EOS>
+                                                max(readers['train'].max_dial_len, readers['valid'].max_dial_len),
+                                                max(readers['train'].max_turn_len, readers['valid'].max_turn_len) + 2,
+                                                max(readers['train'].max_slu_len, readers['valid'].max_slu_len) + 2),
+                                        # +2 for <BOS>,<EOS>
                                         ToTensor()])
-    train_dataset = Dataset(data_reader.train_set, transform=composed_transforms)
-    valid_dataset = Dataset(data_reader.valid_set, transform=composed_transforms)
-    test_dataset = Dataset(data_reader.test_set, transform=composed_transforms)
+    train_dataset = Dataset(readers['train'].dialogues, transform=composed_transforms)
+    valid_dataset = Dataset(readers['valid'].dialogues, transform=composed_transforms)
+    test_dataset = Dataset(readers['test'].dialogues, transform=composed_transforms)
     train_loader = TorchDataLoader(train_dataset, batch_size=config['batch_size'], shuffle=True)
     valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
@@ -99,6 +106,7 @@ def main(flags):
             early_stop_callback=EarlyStopping(patience=3),
             progress_bar_refresh_rate=1
         )
+        run_evaluation(output_dir, model, valid_dataset)
         trainer.fit(model)
         run_evaluation(output_dir, model, valid_dataset)
 

@@ -1,6 +1,7 @@
 import pickle
 from collections import Counter
 import json
+import os
 
 import numpy
 
@@ -33,7 +34,10 @@ class DataReader:
         self.max_dial_len = 0
         self.max_turn_len = 0
         self.max_slu_len = 0
-        self.db = None if db_file is None else JSONDb(db_file)
+        if db_file is not None and os.path.exists(db_file):
+            self.db = JSONDb(db_file)
+        else:
+            self.db = None
         self.delexicalizer = delexicalizer
         self.all_words = Counter()
         if saved_dialogues is not None:
@@ -323,6 +327,7 @@ class MovieReader:
         slu = [ Slot(e['entity'].lower(), e['text'], 'unk') for e in entities]
         return text, slu
 
+
 class AtisReader:
     
     def __init__(self):
@@ -372,3 +377,35 @@ class CarsluReader:
             dialogue.add_turn(turn)
             yield dialogue
 
+
+class SMDReader:
+
+    def parse_dialogues(self, data, delex=None):
+        for dial in data:
+            dialogue = Dialogue()
+            turns = dial['dialogue']
+            last_state = {}
+            for t in turns:
+                tt = t['turn']
+                if tt == 'driver':
+                    turn = Turn()
+                    turn.add_user(t['data']['utterance'])
+                elif turn is not None:
+                    turn.add_system(t['data']['utterance'])
+                    slu = self.parse_slu(t['data']['slots'])
+                    turn.add_usr_slu(slu)
+                    dialogue.add_turn(turn)
+                    turn = None
+
+                # state = self.parse_slu(t['usr']['slu'])
+                # slu = []
+                # for s in state:
+                #     if s.name not in last_state or last_state[s.name] != s.val:
+                #         slu.append(s)
+                #     last_state[s.name] = s.val
+                # turn.add_state(state)
+            yield dialogue
+
+    def parse_slu(self, slots):
+        slu = [Slot(k, v, 'dummy') for k, v in slots.items()]
+        return slu

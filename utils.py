@@ -20,7 +20,6 @@ def tokenize(utt):
     utt = re.sub(r'(\w)!', r'\1 !', utt, flags=re.DOTALL)
     utt = re.sub(r'(\w),', r'\1 ,', utt, flags=re.DOTALL)
 
-
     return [tk.lower().strip('\'') for tk in utt.split()]
 
 
