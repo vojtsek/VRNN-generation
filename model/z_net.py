@@ -80,6 +80,8 @@ class ZNet(torch.nn.Module):
 
         if self.z_type == 'cont':
             q_z = q_z_samples
+            p_z = q_z_samples
+            p_z_samples = q_z_samples
         # else:
             # logp = torch.log(p_z)
             # logq = torch.log(q_z)

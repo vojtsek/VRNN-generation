@@ -18,7 +18,8 @@ class VAECell(torch.nn.Module):
         self.embeddings = embeddings
         embedding_dim = embeddings.embedding_dim
         self.vrnn_cell = vrnn_cell
-        self.aggregation_layer = torch.nn.Conv1d(in_channels=config['number_z_vectors'], out_channels=1, kernel_size=1)
+        self.aggregation_layer = torch.nn.Conv1d(in_channels=config['system_number_z_vectors'],
+                                                 out_channels=1, kernel_size=1)
         self.embedding_encoder = torch.nn.LSTM(embedding_dim,
                                                config['input_encoder_hidden_size'],
                                                bidirectional=config['bidirectional_encoder'])
@@ -29,13 +30,13 @@ class VAECell(torch.nn.Module):
                                                      config['user_z_logits_dim'],
                                                      config['user_z_total_size'],
                                                      fake_prior=True)
-                                                for _ in range(config['number_z_vectors'])])
+                                                for _ in range(config['user_number_z_vectors'])])
         self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type'],
                                                        config['system_z_logits_dim'],
                                                        config['system_z_total_size'] +
                                                        self.encoder_hidden_size,
                                                        fake_prior=self.config['fake_prior'])
-                                                  for _ in range(config['number_z_vectors'])])
+                                                  for _ in range(config['system_number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
                                    config['user_z_total_size'] +
                                    # self.encoder_hidden_size +
@@ -43,7 +44,7 @@ class VAECell(torch.nn.Module):
                                    config['user_decoder_hidden_size'],
                                    encoder_hidden_size=self.encoder_hidden_size,
                                    teacher_prob=config['teacher_forcing_prob'],
-                                   use_copy=self.config['use_copynet'],
+                                   # use_copy=self.config['use_copynet'],
                                    use_attention=self.config['use_attention'],
                                    drop_prob=config['drop_prob'])
 
@@ -59,7 +60,7 @@ class VAECell(torch.nn.Module):
                                       drop_prob=config['drop_prob'])
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
-                                      config['user_z_total_size'] +
+                                      # config['user_z_total_size'] +
                                       config['vrnn_hidden_size'] +
                                       config['system_z_total_size'] + config['db_cutoff'] + 1,
                                       # config['input_encoder_hidden_size'] *
@@ -70,7 +71,7 @@ class VAECell(torch.nn.Module):
                                       drop_prob=config['drop_prob'])
 
         self.system_dec = RNNDecoder(embeddings,
-                                     config['user_z_total_size'] +
+                                     # config['user_z_total_size'] +
                                      config['vrnn_hidden_size'] +
                                      config['system_z_total_size'] + config['db_cutoff'] + 1,
                                      # config['input_encoder_hidden_size'] *
@@ -131,7 +132,7 @@ class VAECell(torch.nn.Module):
 
         if prev_output is not None:
             decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], prev_output.sampled_z, sampled_latent, db_res.squeeze(1)], dim=1)
+                [previous_vrnn_hidden[0], sampled_latent, db_res.squeeze(1)], dim=1)
                 # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
         else:
             copy_encoder_hiddens = encoder_outs

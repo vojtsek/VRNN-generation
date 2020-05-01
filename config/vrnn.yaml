@@ -1,9 +1,9 @@
 # data settings
 data_type: 'raw'
-#data_dir: 'VRNN/data/camrest'
-#domain: 'camrest'
-data_dir: 'VRNN/data/SMD'
-domain: 'smd'
+data_dir: 'VRNN/data/camrest'
+domain: 'camrest'
+#data_dir: 'VRNN/data/SMD'
+#domain: 'smd'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
@@ -15,13 +15,14 @@ gumbel_softmax_tmp: 2.0
 teacher_forcing_prob: 0.5
 z_teacher_forcing_prob: 0.5
 kl_to_ce: 1
-number_z_vectors: 5
+user_number_z_vectors: 1
+system_number_z_vectors: 1
 begin_kl_opt_epoch: 3
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
 use_copynet: true
-use_attention: true
+use_attention: false
 with_bpr: false
 with_bow_loss: false
 fake_prior: false
@@ -52,7 +53,7 @@ prior_ff_sizes:
   - 50
 bow_layer_size: 400
 # latent z config
-user_z_type: 'gumbel' # cont| gumbel;
+user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
-user_z_logits_dim: 30
+user_z_logits_dim: 200
 system_z_logits_dim: 20

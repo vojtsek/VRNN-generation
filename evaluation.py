@@ -48,7 +48,7 @@ class ZSemanticEvaluator(Evaluator):
         self.bleu_score = 0
 
     def eval_from_dir(self, directory, role=None):
-        with open(os.path.join(directory, f'output_all_22.txt'), 'rt') as in_fd:
+        with open(os.path.join(directory, f'output_all_15.txt'), 'rt') as in_fd:
             current_turn_number = None
             current_turn_type = []
             slot_map = dict()
@@ -82,8 +82,12 @@ class ZSemanticEvaluator(Evaluator):
 
                 if role == 'system':
                     if 'SYS HYP:' in line:
-                        if 'address' or 'phone' in line or 'number' in line:
+                        if 'address' in 'line' or 'phone' in line or 'number' in line:
                             current_turn_type.append('PHONE')
+                        if 'closest' in line or 'miles away' in line:
+                            current_turn_type.append('WHERE')
+                        if 'what city' in line:
+                            current_turn_type.append('ASK-CITY')
                         if '<name> is a' in line or \
                                 '<name> is located' in line:
                             current_turn_type.append('OFFER_REST')

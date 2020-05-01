@@ -83,8 +83,8 @@ def main(flags):
     valid_loader = TorchDataLoader(valid_dataset, batch_size=config['batch_size'], shuffle=True)
     test_loader = TorchDataLoader(test_dataset, batch_size=config['batch_size'], shuffle=True)
 
-    config['system_z_total_size'] = config['system_z_logits_dim'] * config['number_z_vectors']
-    config['user_z_total_size'] = config['user_z_logits_dim'] * config['number_z_vectors']
+    config['system_z_total_size'] = config['system_z_logits_dim'] * config['system_number_z_vectors']
+    config['user_z_total_size'] = config['user_z_logits_dim'] * config['user_number_z_vectors']
     config['encoder_hidden_total_size'] = config['input_encoder_hidden_size'] * (1 + config['bidirectional_encoder'])
     if flags.model_path is not None:
         checkpoint = torch.load(flags.model_path)
