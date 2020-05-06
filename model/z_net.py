@@ -66,16 +66,18 @@ class ZNet(torch.nn.Module):
             q_z_samples =\
                 gumbel_softmax_sample(z_posterior_logits,
                                       self.config['gumbel_softmax_tmp'],
-                                      hard=self.config['gumbel_hard'])
+                                      hard=self.config['gumbel_hard'],
+                                      device=self.config['device'])
         else:
             mu = z_posterior_logits[:, :self.z_logits_dim]
             logvar = z_posterior_logits[:, self.z_logits_dim:]
             q_z = z_posterior_logits
-            q_z_samples = normal_sample(mu, logvar)
+            q_z_samples = normal_sample(mu, logvar, device=self.config['device'])
         p_z_samples =\
             gumbel_softmax_sample(z_prior_logits,
                                   self.config['gumbel_softmax_tmp'],
-                                  hard=self.config['gumbel_hard'])
+                                  hard=self.config['gumbel_hard'],
+                                  device=self.config['device'])
         # z_posterior_projection = self.posterior_net2(q_z_samples)
 
         if self.z_type == 'cont':
@@ -97,5 +99,5 @@ class ZNet(torch.nn.Module):
         return q_z_samples, q_z, p_z_samples, p_z
 
     def _reset_hidden(self):
-        zero_h = zero_hidden((self.config['batch_size'], self.lstm_size))
+        zero_h = zero_hidden((self.config['batch_size'], self.lstm_size)).to(self.config['device'])
         self.last_prior_hidden = (zero_h, zero_h)

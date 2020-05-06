@@ -13,9 +13,10 @@ class RNNDecoder(torch.nn.Module):
 
     def __init__(self, embeddings, init_hidden_size,
                  hidden_size, encoder_hidden_size=None, concat_size=None, use_attention=False,
-                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False):
+                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False, device=torch.device('cpu:0')):
         super(RNNDecoder, self).__init__()
-        self.embeddings = embeddings
+        self.embeddings = embeddings.to(device)
+        self.device = device
         self.padding_idx = padding_idx
         self.bos_idx = bos_idx
         self.vocab_size = embeddings.num_embeddings
@@ -76,13 +77,16 @@ class RNNDecoder(torch.nn.Module):
             u_copy_score = torch.matmul(u_copy_score, output_drop.squeeze(0).unsqueeze(2)).squeeze(2)
             u_copy_score_max, _ = torch.max(u_copy_score, dim=1, keepdim=True)
             u_copy_score = torch.exp(u_copy_score - u_copy_score_max)  # [B,T]
-            encoder_idxs_emb = embed_oh(encoder_idxs, list(encoder_idxs.shape) + [self.vocab_size ])
+            encoder_idxs_emb = embed_oh(encoder_idxs, list(encoder_idxs.shape) + [self.vocab_size ], device=self.device)
             u_copy_score = torch.log(
                 torch.bmm(u_copy_score.unsqueeze(1), encoder_idxs_emb).squeeze(1) + 1e-35) + u_copy_score_max  # [B,V]
             scores = F.softmax(torch.cat([score_gen.squeeze(0), u_copy_score], dim=1), dim=1)
             score_gen, u_copy_score = scores[:, :self.vocab_size], \
                                       scores[:, self.vocab_size:]
             output_proba = score_gen + copy_coeff * u_copy_score[:, :self.vocab_size]  # [B,V]
+            del encoder_idxs_emb
+            # torch.cuda().empty_cache()
+
             # gen = torch.argmax(score_gen, dim=-1).numpy()
             # cpy = torch.argmax(output_proba, dim=-1).numpy()
             # if any([g != c for g, c in zip(gen, cpy)]):
@@ -103,11 +107,15 @@ class RNNDecoder(torch.nn.Module):
         """Unroll the decoder one step at a time."""
 
         hidden = self.get_init_hidden(init_hidden)
+        del_hidden = hidden
+
 
         outputs = []
         projected_outputs = []
 
         next_input_idx = torch.ones(1, init_hidden.shape[0], dtype=torch.int64) * self.bos_idx
+        next_input_idx = next_input_idx.to(self.device)
+        next_input_idx_to_del = next_input_idx
         for i in range(max_len):
             output, hidden, projected_output =\
                 self.forward_step(next_input_idx,
@@ -127,6 +135,8 @@ class RNNDecoder(torch.nn.Module):
             projected_outputs.append(projected_output)
 
         outputs = torch.cat(outputs, dim=0)
+        del next_input_idx_to_del, del_hidden
+        # torch.cuda.empty_cache()
         projected_outputs = torch.cat(projected_outputs, dim=0)
         return outputs, hidden, projected_outputs  # [B, N, D]
 

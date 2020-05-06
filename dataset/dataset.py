@@ -82,14 +82,18 @@ class Padding(object):
 
 class ToTensor(object):
 
+    def __init__(self, device):
+        self.device = device
+
     def __call__(self, sample):
-        return (torch.from_numpy(sample['user_dials']),
-                torch.from_numpy(sample['system_dials']),
-                torch.from_numpy(sample['usr_nlu_dials']),
-                torch.from_numpy(sample['sys_nlu_dials']),
-                torch.from_numpy(sample['user_turn_lens']),
-                torch.from_numpy(sample['system_turn_lens']),
-                torch.from_numpy(sample['usr_nlu_turn_lens']),
-                torch.from_numpy(sample['sys_nlu_turn_lens']),
-                torch.from_numpy(sample['db_dials']),
-                torch.from_numpy(sample['dial_len']))
+        return (torch.from_numpy(sample['user_dials']).to(self.device),
+                torch.from_numpy(sample['system_dials']).to(self.device),
+                torch.from_numpy(sample['usr_nlu_dials']).to(self.device),
+                torch.from_numpy(sample['sys_nlu_dials']).to(self.device),
+                torch.from_numpy(sample['user_turn_lens']).to(self.device),
+                torch.from_numpy(sample['system_turn_lens']).to(self.device),
+                torch.from_numpy(sample['usr_nlu_turn_lens']).to(self.device),
+                torch.from_numpy(sample['sys_nlu_turn_lens']).to(self.device),
+                torch.from_numpy(sample['db_dials']).to(self.device),
+                torch.from_numpy(sample['dial_len']).to(self.device))
+

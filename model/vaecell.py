@@ -46,7 +46,8 @@ class VAECell(torch.nn.Module):
                                    teacher_prob=config['teacher_forcing_prob'],
                                    # use_copy=self.config['use_copynet'],
                                    use_attention=self.config['use_attention'],
-                                   drop_prob=config['drop_prob'])
+                                   drop_prob=config['drop_prob'],
+                                   device=self.config['device'])
 
         self.usr_nlu_dec = RNNDecoder(embeddings,
                                       config['user_z_total_size'] +
@@ -57,7 +58,8 @@ class VAECell(torch.nn.Module):
                                       teacher_prob=config['teacher_forcing_prob'],
                                       use_copy=self.config['use_copynet'],
                                       use_attention=self.config['use_attention'],
-                                      drop_prob=config['drop_prob'])
+                                      drop_prob=config['drop_prob'],
+                                      device=self.config['device'])
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       # config['user_z_total_size'] +
@@ -68,7 +70,8 @@ class VAECell(torch.nn.Module):
                                       # config['vrnn_hidden_size'],
                                       config['system_decoder_hidden_size'],
                                       teacher_prob=config['teacher_forcing_prob'],
-                                      drop_prob=config['drop_prob'])
+                                      drop_prob=config['drop_prob'],
+                                      device=self.config['device'])
 
         self.system_dec = RNNDecoder(embeddings,
                                      # config['user_z_total_size'] +
@@ -85,7 +88,8 @@ class VAECell(torch.nn.Module):
                                      padding_idx=self.vocab.w2id[self.vocab.PAD],
                                      bos_idx=self.vocab.w2id[self.vocab.BOS],
                                      use_copy=self.config['use_copynet'],
-                                     use_attention=self.config['use_attention'])
+                                     use_attention=self.config['use_attention'],
+                                     device=self.config['device'])
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
                                     activations=[None, torch.relu],
@@ -99,7 +103,7 @@ class VAECell(torch.nn.Module):
         # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
         dials_idx = dials
         if db_res is not None:
-            db_res = embed_oh(db_res, list(db_res.shape) + [self.config['db_cutoff']+1])
+            db_res = embed_oh(db_res, list(db_res.shape) + [self.config['db_cutoff']+1], device=self.config['device'])
         dials = self.embeddings(dials).transpose(1, 0)
         dials_idx_packed = pack_padded_sequence(dials_idx.transpose(1, 0), lens[0], enforce_sorted=False)
         dials_idx, _ = pad_packed_sequence(dials_idx_packed)
@@ -149,7 +153,6 @@ class VAECell(torch.nn.Module):
             copy_coeff = copy_coeff_initial * \
                          step ** min(max(self.epoch_number - self.config['copy_start_epoch'], 0), self.config['min_epochs'])
             copy_coeff = torch.from_numpy(np.array(copy_coeff))
-        print(copy_coeff)
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
                 decoder(dials_idx,
@@ -167,6 +170,8 @@ class VAECell(torch.nn.Module):
         else:
             bow_logits = None
 
+        del db_res
+        # torch.cuda.empty_cache()
         return TurnOutput(decoded_outputs=all_decoded_outputs,
                           q_z=q_z.transpose(1, 0),
                           p_z=p_z.transpose(1, 0),
@@ -186,7 +191,7 @@ class VAECell(torch.nn.Module):
         encoder_init_state = zero_hidden((2,
                                           1 + int(self.config['bidirectional_encoder']),
                                           user_dials.shape[1],
-                                          self.config['input_encoder_hidden_size']))
+                                          self.config['input_encoder_hidden_size'])).to(self.config['device'])
 
         user_turn_output, user_dials_idx = self._z_module(user_dials,
                                                           [user_lens, usr_nlu_lens],
@@ -216,6 +221,8 @@ class VAECell(torch.nn.Module):
         vrnn_input = torch.cat([system_sampled_z, encoded_inputs], dim=1)
         next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 
+        del encoder_init_state
+        # torch.cuda.empty_cache()
         return VAECellOutput(next_vrnn_hidden=next_vrnn_hidden,
                              user_turn_output=user_turn_output,
                              system_turn_output=system_turn_output)

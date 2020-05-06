@@ -60,22 +60,23 @@ def main(flags):
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
     shutil.copy(flags.config, os.path.join(output_dir, 'conf.yaml'))
-    repo = Repo(os.path.dirname(sys.argv[0]))
-    with open(os.path.join(output_dir, 'gitcommit.txt'), 'wt') as fd:
-        print(f'{repo.head.commit}@{repo.active_branch}', file=fd)
+#    repo = Repo(os.path.dirname(sys.argv[0]))
+#    with open(os.path.join(output_dir, 'gitcommit.txt'), 'wt') as fd:
+#        print(f'{repo.head.commit}@{repo.active_branch}', file=fd)
 
     embeddings = Embeddings(config['embedding_fn'],
-                            out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
+                            out_fn='VRNN-generation/data/embeddings/fasttext-wiki.pkl',
                             extern_vocab=[w for w, _ in (readers['train'].all_words.most_common(5000) +\
                                                          readers['valid'].all_words.most_common(5000))])
     embeddings.add_tokens_rnd(delexicalizer.all_tags)
+    config['device'] = torch.device(config['device_name'])
     composed_transforms = TorchCompose([WordToInt(embeddings, config['db_cutoff']),
                                         Padding(embeddings.w2id[Embeddings.PAD],
                                                 max(readers['train'].max_dial_len, readers['valid'].max_dial_len),
                                                 max(readers['train'].max_turn_len, readers['valid'].max_turn_len) + 2,
                                                 max(readers['train'].max_slu_len, readers['valid'].max_slu_len) + 2),
                                         # +2 for <BOS>,<EOS>
-                                        ToTensor()])
+                                        ToTensor(config['device'])])
     train_dataset = Dataset(readers['train'].dialogues, transform=composed_transforms)
     valid_dataset = Dataset(readers['valid'].dialogues, transform=composed_transforms)
     test_dataset = Dataset(readers['test'].dialogues, transform=composed_transforms)
@@ -86,6 +87,7 @@ def main(flags):
     config['system_z_total_size'] = config['system_z_logits_dim'] * config['system_number_z_vectors']
     config['user_z_total_size'] = config['user_z_logits_dim'] * config['user_number_z_vectors']
     config['encoder_hidden_total_size'] = config['input_encoder_hidden_size'] * (1 + config['bidirectional_encoder'])
+    print(config['device'])
     if flags.model_path is not None:
         checkpoint = torch.load(flags.model_path)
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
@@ -104,11 +106,12 @@ def main(flags):
             show_progress_bar=True,
             checkpoint_callback=checkpoint_callback(os.path.join(output_dir, 'model')),
             early_stop_callback=EarlyStopping(patience=3),
-            progress_bar_refresh_rate=1
+            progress_bar_refresh_rate=1,
+            gpus=1 if 'cuda' in config['device_name'] else 0
         )
-        run_evaluation(output_dir, model, valid_dataset)
+        run_evaluation(output_dir, model, valid_dataset, config['device'])
         trainer.fit(model)
-        run_evaluation(output_dir, model, valid_dataset)
+        run_evaluation(output_dir, model, valid_dataset, config['device'])
 
 
 class EvaluationCb(pl.Callback):
@@ -117,12 +120,13 @@ class EvaluationCb(pl.Callback):
         self.dataset = dataset
 
     def on_epoch_end(self, trainer, model):
-        run_evaluation(self.output_dir, model, self.dataset)
+        run_evaluation(self.output_dir, model, self.dataset, model.config['device'])
         model.train()
 
 
-def run_evaluation(output_dir, model, dataset):
+def run_evaluation(output_dir, model, dataset, device):
     model.eval()
+    model = model.to(device)
     loader = TorchDataLoader(dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, f'output_all_{model.epoch_number}.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
@@ -147,7 +151,6 @@ def run_evaluation(output_dir, model, dataset):
                 print(f'\t{" ".join(predictions.all_usr_nlu_predictions[i])}', file=all_fd)
                 print(f'\tSYS HYP:{" ".join(predictions.all_system_predictions[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_sys_nlu_predictions[i])}', file=all_fd)
-                print(f'\tORIG:', file=all_fd)
                 print(f'\tUSER GT{" ".join(predictions.all_user_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_usr_nlu_gt[i])}', file=all_fd)
                 print(f'\tSYS GT:{" ".join(predictions.all_system_gt[i])}', file=all_fd)

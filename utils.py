@@ -43,10 +43,10 @@ def pad_dial(turns, max_dial_len, max_turn_len, pad):
     return np.array(padded), np.array(turn_lens)
 
 
-def embed_oh(vec, size):
+def embed_oh(vec, size, device):
     vec = vec.unsqueeze(-1).repeat(1, 1, size[-1])
-    src = torch.ones(*size)
-    oh = torch.zeros(*size)
+    src = torch.ones(*size).to(device)
+    oh = torch.zeros(*size).to(device)
 
     oh.scatter_(2, vec, src)
     return oh
@@ -55,20 +55,20 @@ def zero_hidden(sizes):
     return torch.randn(*sizes)
 
 
-def sample_gumbel(shape, eps=1e-20):
+def sample_gumbel(shape, device, eps=1e-20):
     """Sample from Gumbel(0, 1)"""
-    U = torch.rand(*shape)
+    U = torch.rand(*shape).to(device)
     return -torch.log(-torch.log(U + eps) + eps)
 
 
-def gumbel_softmax_sample(logits, temperature, hard=False):
+def gumbel_softmax_sample(logits, temperature, hard=False, device=torch.device('cpu')):
     """ Draw a sample from the Gumbel-Softmax distribution"""
-    y = logits + sample_gumbel(logits.shape)
+    y = logits + sample_gumbel(logits.shape, device)
     y = torch_fun.softmax(y / temperature, dim=-1)
     shape = y.shape
 
     _, ind = y.max(dim=-1)
-    y_hard = torch.zeros_like(y).view(-1, shape[-1])
+    y_hard = torch.zeros_like(y).view(-1, shape[-1]).to(device)
     y_hard.scatter_(1, ind.view(-1, 1), 1)
     y_hard = y_hard.view(*shape)
     if hard:
@@ -78,7 +78,7 @@ def gumbel_softmax_sample(logits, temperature, hard=False):
 
 
 
-def normal_sample(mu, logvar):
+def normal_sample(mu, logvar, device):
     std = torch.exp(0.5 * logvar)
-    eps = torch.randn_like(std)
+    eps = torch.randn_like(std).to(device)
     return eps * std + mu

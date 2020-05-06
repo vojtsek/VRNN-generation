@@ -32,7 +32,7 @@ class VRNN(pl.LightningModule):
             config['system_z_total_size'] +
             config['input_encoder_hidden_size'] * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
-        self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d)
+        self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d).to(self.config['device'])
         self.embeddings_matrix.weight = torch.nn.Parameter(torch.from_numpy(embeddings.matrix))
         self.vae_cell = VAECell(self.embeddings_matrix,
                                 self.vrnn_cell,
@@ -46,7 +46,7 @@ class VRNN(pl.LightningModule):
     def forward(self, user_dials, system_dials, usr_nlu_dials,
                 sys_nlu_dials, user_lens, system_lens, usr_nlu_lens,
                 sys_nlu_lens, db_res, dial_lens):
-        batch_sort_perm = reversed(np.argsort(dial_lens))
+        batch_sort_perm = torch.LongTensor(list(reversed(np.argsort(dial_lens.cpu().numpy())))).to(self.config['device'])
         user_dials = user_dials[batch_sort_perm].transpose(1, 0)
         user_lens = user_lens[batch_sort_perm].transpose(1, 0)
         usr_nlu_dials = usr_nlu_dials[batch_sort_perm].transpose(1, 0)
@@ -82,12 +82,13 @@ class VRNN(pl.LightningModule):
 
         initial_hidden = zero_hidden((2,
                                       self.config['batch_size'],
-                                      self.config['vrnn_hidden_size']))
+                                      self.config['vrnn_hidden_size'])).to(self.config['device'])
 
         offset = 0
         vrnn_hidden_state = (initial_hidden[0], initial_hidden[1])
-        user_z_previous = zero_hidden((self.config['batch_size'], self.config['user_z_total_size']))
-        system_z_previous = zero_hidden((self.config['batch_size'], self.config['system_z_total_size']))
+        user_z_previous = zero_hidden((self.config['batch_size'], self.config['user_z_total_size'])).to(self.config['device'])
+        system_z_previous = zero_hidden((self.config['batch_size'], self.config['system_z_total_size'])).to(self.config['device'])
+        to_del = [initial_hidden, user_z_previous, system_z_previous]
         user_outputs, system_outputs = [], []
         usr_nlu_outputs, sys_nlu_outputs = [], []
         user_q_zs, user_p_zs, z_samples = [], [], []
@@ -130,6 +131,10 @@ class VRNN(pl.LightningModule):
                 bow_logits_list.extend(vae_output.user_turn_output.bow_logits)
             z_samples.extend(vae_output.system_turn_output.z_samples)
 
+        for d in to_del:
+            del d
+        del batch_sort_perm
+        # torch.cuda.empty_cache()
         def _pad_packed(seq):
             if isinstance(seq, list):
                 seq = torch.stack(seq)
@@ -167,7 +172,7 @@ class VRNN(pl.LightningModule):
             batch_size = uo.shape[1]
             ud_reference = reference[i].transpose(0, 1)[:uo.shape[0]]
             batch_lens = output_lens[i, :batch_size]
-            sort_perm = reversed(np.argsort(batch_lens))
+            sort_perm = torch.LongTensor(list(reversed(np.argsort(batch_lens.cpu().numpy())))).to(self.config['device'])
             output_serialized, lens1, sorted_indices, unsorted_indices = \
                 pack_padded_sequence(uo[:, sort_perm, :], batch_lens[sort_perm], enforce_sorted=True)
             reference_serialized, lens2, sorted_indices, unsorted_indices = \
@@ -177,6 +182,9 @@ class VRNN(pl.LightningModule):
                 # print(batch_size)
             total_loss += F.nll_loss(output_serialized, reference_serialized, reduction='mean') * batch_size
             total_count += batch_size
+            del sort_perm
+
+        # torch.cuda.empty_cache()
         return total_loss / total_count
 
     def _compute_bow_loss(self, bow_logits, outputs, reference, output_lens):
@@ -239,13 +247,15 @@ class VRNN(pl.LightningModule):
         kl = (log_q_z - log_p_z) * q_z
         q_max, _ = torch.max(q_z, dim=-1)
         p_max, _ = torch.max(p_z, dim=-1)
-        q_diffs = torch.ones(*q_max.shape) - q_max
-        p_diffs = torch.ones(*p_max.shape) - p_max
+        q_diffs = torch.ones(*q_max.shape).to(self.config['device']) - q_max
+        p_diffs = torch.ones(*p_max.shape).to(self.config['device']) - p_max
         # KL per each Z vector
         kl = torch.sum(torch.mean(torch.sum(kl, dim=-1), dim=0))
         ce = F.nll_loss(log_p_z.transpose(2, 1), q_labels, reduction='mean')
         # print('KL, CE', kl, ce)
-        return ce + kl, torch.mean(q_diffs), torch.mean(p_diffs)
+        del p_diffs, q_diffs
+        # torch.cuda.empty_cache()
+        return ce + kl
 
     def _step(self, batch, optimizer_idx=0):
         user_dials, system_dials, usr_nlu_dials, sys_nlu_dials, user_lens,\
@@ -276,20 +286,21 @@ class VRNN(pl.LightningModule):
         decoder_losses = [total_system_decoder_loss, total_user_decoder_loss,
                         total_usr_nlu_decoder_loss, total_sys_nlu_decoder_loss]
         decoder_loss = torch.mean(torch.stack(decoder_losses))
-        batch_sort_perm = reversed(np.argsort(dial_lens))
+        batch_sort_perm = torch.LongTensor(list(reversed(np.argsort(dial_lens.cpu().numpy())))).to(self.config['device'])
         dial_lens = dial_lens[batch_sort_perm]
         if self.config['user_z_type'] == 'cont':
             # KL loss from N(0, 1)
             usr_kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
         else:
             # KL loss between q_z and p_z
-            usr_kl_loss, q_penalty, p_penalty = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
+            usr_kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
         if self.config['system_z_type'] == 'cont':
             system_kl_loss = self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
         else:
-            system_kl_loss, q_penalty, p_penalty =\
+            system_kl_loss =\
                 self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
+        del step_output.system_q_zs, step_output.system_p_zs, step_output.user_q_zs, step_output.user_p_zs, batch_sort_perm
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
         final_usr_kl_term = 1
         final_sys_kl_term = 10
@@ -357,8 +368,8 @@ class VRNN(pl.LightningModule):
 
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, ground_truths, inv_vocab):
         for i, uo in enumerate(outputs):
-            ud_reference = reference_dials[i].transpose(1, 0)[:uo.shape[0], :uo.shape[1]].numpy()
-            uo = torch.argmax(uo, dim=2).numpy()
+            ud_reference = reference_dials[i].transpose(1, 0)[:uo.shape[0], :uo.shape[1]].cpu().numpy()
+            uo = torch.argmax(uo, dim=2).cpu().numpy()
             predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
             ground_truths.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
 
@@ -395,10 +406,10 @@ class VRNN(pl.LightningModule):
                                            all_system_gt,
                                            inv_vocab)
 
-        all_samples = torch.argmax(step_output.z_samples, dim=2).numpy()
-        all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).numpy()
-        all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).numpy()
-        all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).numpy()
+        all_samples = torch.argmax(step_output.z_samples, dim=2).cpu().numpy()
+        all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).cpu().numpy()
+        all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).cpu().numpy()
+        all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).cpu().numpy()
         return PredictedOuputs(all_user_predictions,
                                all_user_gt,
                                all_system_predictions,
