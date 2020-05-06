@@ -1,12 +1,12 @@
 # data settings
 data_type: 'raw'
-data_dir: 'VRNN/data/camrest'
-domain: 'camrest'
-#data_dir: 'VRNN/data/SMD'
-#domain: 'smd'
+#data_dir: 'VRNN/data/camrest'
+#domain: 'camrest'
+data_dir: 'VRNN/data/SMD'
+domain: 'smd'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
+embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.vec'
 # general settings
 batch_size: 8
 drop_prob: 0.7
@@ -21,7 +21,7 @@ begin_kl_opt_epoch: 3
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
-use_copynet: true
+use_copynet: false
 use_attention: false
 with_bpr: false
 with_bow_loss: false
@@ -29,7 +29,7 @@ fake_prior: false
 min_epochs: 90
 max_epochs: 100
 db_cutoff: 3
-
+copy_start_epoch: 50
 # KL before start increasing
 init_KL_term: 0.001
 # bow loss setting

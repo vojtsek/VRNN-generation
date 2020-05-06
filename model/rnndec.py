@@ -45,7 +45,8 @@ class RNNDecoder(torch.nn.Module):
                      hidden,
                      encoder_hidden_states=None,
                      encoder_idxs=None,
-                     concat_z=None):
+                     concat_z=None,
+                     copy_coeff=0):
         """Perform a single decoder step (1 word)"""
 
         # compute context vector using attention mechanism
@@ -81,9 +82,9 @@ class RNNDecoder(torch.nn.Module):
             scores = F.softmax(torch.cat([score_gen.squeeze(0), u_copy_score], dim=1), dim=1)
             score_gen, u_copy_score = scores[:, :self.vocab_size], \
                                       scores[:, self.vocab_size:]
-            output_proba = score_gen + u_copy_score[:, :self.vocab_size]  # [B,V]
-            gen = torch.argmax(score_gen, dim=-1).numpy()
-            cpy = torch.argmax(output_proba, dim=-1).numpy()
+            output_proba = score_gen + copy_coeff * u_copy_score[:, :self.vocab_size]  # [B,V]
+            # gen = torch.argmax(score_gen, dim=-1).numpy()
+            # cpy = torch.argmax(output_proba, dim=-1).numpy()
             # if any([g != c for g, c in zip(gen, cpy)]):
             #     print('COPY WINS', gen, cpy, torch.argmax(u_copy_score[:, :self.vocab_size], dim=-1).numpy())
             # else:
@@ -91,7 +92,14 @@ class RNNDecoder(torch.nn.Module):
 
         return output, hidden, torch.log(output_proba).unsqueeze(0)
 
-    def forward(self, trg_embed, init_hidden, to_concat=None, max_len=None, encoder_hidden_states=None, encoder_idxs=None):
+    def forward(self,
+                trg_embed,
+                init_hidden,
+                to_concat=None,
+                max_len=None,
+                encoder_hidden_states=None,
+                encoder_idxs=None,
+                copy_coeff=0):
         """Unroll the decoder one step at a time."""
 
         hidden = self.get_init_hidden(init_hidden)
@@ -106,7 +114,8 @@ class RNNDecoder(torch.nn.Module):
                                   hidden,
                                   encoder_hidden_states,
                                   encoder_idxs,
-                                  to_concat.unsqueeze(0) if self.concat else None)
+                                  to_concat.unsqueeze(0) if self.concat else None,
+                                  copy_coeff)
             outputs.append(output)
             last_decoder = torch.argmax(projected_output, dim=2)
             # teacher forcing

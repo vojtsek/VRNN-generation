@@ -1,6 +1,6 @@
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
-
+import numpy as np
 from . import FFNet, RNNDecoder
 from .z_net import ZNet
 from ..utils import zero_hidden, embed_oh
@@ -142,6 +142,14 @@ class VAECell(torch.nn.Module):
                 # [previous_vrnn_hidden[0], last_hidden], dim=1)
         all_decoded_outputs = []
 
+        copy_coeff = 0
+        if self.epoch_number >= self.config['copy_start_epoch']:
+            copy_coeff_initial = 1e-3
+            step = np.exp(np.log(1 / copy_coeff_initial) / 10)
+            copy_coeff = copy_coeff_initial * \
+                         step ** min(max(self.epoch_number - self.config['copy_start_epoch'], 0), self.config['min_epochs'])
+            copy_coeff = torch.from_numpy(np.array(copy_coeff))
+        print(copy_coeff)
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
                 decoder(dials_idx,
@@ -150,7 +158,8 @@ class VAECell(torch.nn.Module):
                         db_res.squeeze(1) if db_res is not None else None,
                         torch.max(lens[i]),
                         copy_encoder_hiddens,
-                        copy_dials_idx)
+                        copy_dials_idx,
+                        copy_coeff)
             all_decoded_outputs.append(decoded_outputs)
 
         if self.config['with_bow_loss']:
