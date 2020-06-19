@@ -16,70 +16,10 @@ class ZSemanticEvaluator(Evaluator):
         self.bleu_score = 0
 
     def eval_from_dir(self, directory, role=None):
-        with open(os.path.join(directory, f'output_all_15.txt'), 'rt') as in_fd:
-            current_turn_number = None
-            current_turn_type = []
-            slot_map = dict()
-            prior_z_vector = None
-            posterior_z_vector = None
-            relative_line = 1
-            records = []
-            current_nlu_line = ''
-            for line in in_fd:
-                if '--' in line:
-                    records.append(TurnRecord(current_turn_number,
-                                              '-'.join(current_turn_type),
-                                              prior_z_vector,
-                                              posterior_z_vector))
-                    current_turn_number = None
-                    current_turn_type = []
-                    prior_z_vector = None
-                    posterior_z_vector = None
-                if 'Turn' in line:
-                    line = line.split()
-                    current_turn_number = int(line[1])
-                if 'prior Z:' in line:
-                    line = line.split()
-                    prior_z_vector = [(i, int(n)) for i, n in enumerate(line[2:])]
-                if 'post Z:' in line:
-                    line = line.split()
-                    posterior_z_vector = [(i, int(n)) for i, n in enumerate(line[2:])]
-                # if 'user Z:' in line:
-                #     line = line.split()
-                #     posterior_z_vector = [int(n) for n in line[2:]]
-
-                if role == 'system':
-                    if 'SYS HYP:' in line:
-                        if 'address' in 'line' or 'phone' in line or 'number' in line:
-                            current_turn_type.append('PHONE')
-                        if 'closest' in line or 'miles away' in line:
-                            current_turn_type.append('WHERE')
-                        if 'what city' in line:
-                            current_turn_type.append('ASK-CITY')
-                        if '<name> is a' in line or \
-                                '<name> is located' in line:
-                            current_turn_type.append('OFFER_REST')
-                        if 'thank you' in line or 'bye' in line or 'welcome' in line:
-                            current_turn_type.append('GOODBYE')
-                        if 'there are no' in line:
-                            current_turn_type.append('NO_MATCH')
-                        if len(current_turn_type) == 0:
-                            current_turn_type.append('OTHER')
-                else:
-                    if 'Turn' in line:
-                        relative_line = 0
-                    if relative_line == 2:
-                        current_nlu_line = line
-                    if 'user Z' in line:
-                        line = line.split()
-                        z_vector = [int(n) for n in line[2:]]
-                        for val in current_nlu_line.split():
-                            if val not in ['<BOS>', '<EOS>']:
-                                if val not in slot_map:
-                                    slot_map[val] = Counter()
-                                slot_map[val].update([' '.join([str(z) for z in z_vector])])
-                relative_line += 1
-
+        fn = os.path.join(directory, f'output_all.txt')
+        records = []
+        slot_map = dict()
+        TurnRecord.parse(fn, records, slot_map, role)
         if role == 'system':
             def _oh(idx, size):
                 oh = [0] * size
@@ -98,7 +38,6 @@ class ZSemanticEvaluator(Evaluator):
                 classes.append(t_tpe)
                 t_counter = Counter()
                 for record in records:
-                    # X.append([i[1] for i in record.prior_z_vector])
                     d = []
                     for i in record.prior_z_vector:
                         d.extend(_oh(i[1], 20))
