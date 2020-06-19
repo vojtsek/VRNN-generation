@@ -102,3 +102,19 @@ class TurnRecord:
 class Evaluator(ABC):
     def eval_from_dir(self, directory, role=None):
         raise NotImplementedError
+
+
+class CorpusVocab:
+    def __init__(self):
+        self.vocab = Counter()
+
+    def add_element(self, elem):
+        if not isinstance(elem, list):
+            elem = [elem]
+        self.vocab.update(elem)
+
+    def element_prob(self, elem):
+        if elem not in self.vocab:
+            return 1e-15
+        else:
+            return self.vocab[elem] / sum(self.vocab.values())

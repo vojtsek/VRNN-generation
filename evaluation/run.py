@@ -1,7 +1,7 @@
 import argparse
 import os
 
-from . import BleuEvaluator, ZSemanticEvaluator
+from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator
 
 
 def main(args):
@@ -14,6 +14,8 @@ def main(args):
         evaluators.append(BleuEvaluator())
     if 'z_semantics' in metrics:
         evaluators.append(ZSemanticEvaluator())
+    if 'z_info' in metrics:
+        evaluators.append(ZInfoEvaluator('output_all.txt'))
 
     for evaluator in evaluators:
         evaluator.eval_from_dir(args.work_dir, 'system')
