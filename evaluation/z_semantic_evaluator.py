@@ -1,45 +1,13 @@
-import argparse
 import os
 import copy
 from itertools import groupby
 from collections import Counter
-from abc import ABC
-
-import numpy as np
 from sklearn import tree
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score
 import matplotlib.pyplot as plt
-import bleu
 
-
-class Evaluator(ABC):
-    def eval_from_dir(self, directory, role=None):
-        raise NotImplementedError
-
-
-class BleuEvaluator(Evaluator):
-    def __init__(self):
-        self.bleu_score = 0
-
-    def eval_from_dir(self, directory, role=None):
-        with open(os.path.join(directory, f'{role}_out.txt'), 'rt') as hyp_fd,\
-                open(os.path.join(directory, f'{role}_ground_truth.txt'), 'rt') as ref_fd:
-            hyp = [line for line in hyp_fd]
-            ref = [line for line in ref_fd]
-        self.bleu_score = bleu.list_bleu([ref], hyp)
-        print(self.bleu_score)
-
-
-class TurnRecord:
-    def __init__(self, turn_number, turn_type, prior_z_vec, posterior_z_vec):
-        self.turn_number = turn_number
-        self.turn_type = turn_type
-        self.prior_z_vector = prior_z_vec
-        self.posterior_z_vector = posterior_z_vec
-
-    def __str__(self):
-        return f'Turn {self.turn_number}, prior {self.prior_z_vector}, posterior {self.posterior_z_vector}'
+from .commons import Evaluator, TurnRecord
 
 
 class ZSemanticEvaluator(Evaluator):
@@ -158,27 +126,3 @@ class ZSemanticEvaluator(Evaluator):
         else:
             for val, zs in slot_map.items():
                 print(val, zs.most_common(5))
-
-
-def main(args):
-    if not os.path.exists(args.work_dir):
-        print(f'Working directory {args.work_dir} does not exist, exiting.')
-        return
-    evaluators = []
-    metrics = args.metrics.lower()
-    if 'bleu' in metrics:
-        evaluators.append(BleuEvaluator())
-    if 'z_semantics' in metrics:
-        evaluators.append(ZSemanticEvaluator())
-
-    for evaluator in evaluators:
-        evaluator.eval_from_dir(args.work_dir, 'system')
-
-
-if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--metrics', type=str, default='bleu')
-    parser.add_argument('--config', required=True, type=str)
-    parser.add_argument('--work_dir', required=True, type=str)
-    args = parser.parse_args()
-    main(args)
