@@ -8,6 +8,7 @@ import torch.nn.functional as torch_fun
 torch.manual_seed(0)
 np.random.seed(0)
 
+
 def tokenize(utt):
     utt = utt.replace('\'s', ' is')
     utt = utt.replace('\'d', ' would')

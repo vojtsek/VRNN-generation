@@ -39,7 +39,7 @@ class ZNet(torch.nn.Module):
         else:
             self.prior_net = FFNet(cond_z_logits_dim,
                                    config['prior_ff_sizes'],
-                                   activations=[torch.sigmoid],
+                                   activations=[torch.tanh],
                                    drop_prob=config['drop_prob'])
             self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
 

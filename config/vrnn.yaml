@@ -2,16 +2,17 @@
 data_type: 'raw'
 #data_dir: 'VRNN/data/camrest'
 #domain: 'camrest'
-data_dir: 'VRNN-generation/data/SMD'
+data_dir: 'VRNN/data/SMD'
 domain: 'smd'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
+embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.vec'
 # general settings
 device_name: 'cuda:0'
 batch_size: 8
 drop_prob: 0.7
 lr_decay_rate: 0.98
+init_gumbel_softmax_tmp: 2.0
 gumbel_softmax_tmp: 2.0
 teacher_forcing_prob: 0.5
 z_teacher_forcing_prob: 0.5
@@ -27,10 +28,10 @@ use_attention: false
 with_bpr: false
 with_bow_loss: false
 fake_prior: false
-min_epochs: 90
+min_epochs: 30
 max_epochs: 100
 db_cutoff: 3
-copy_start_epoch: 50
+copy_start_epoch: 10
 # KL before start increasing
 init_KL_term: 0.001
 # bow loss setting

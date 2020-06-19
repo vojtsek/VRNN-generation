@@ -65,8 +65,8 @@ def main(flags):
 #        print(f'{repo.head.commit}@{repo.active_branch}', file=fd)
 
     embeddings = Embeddings(config['embedding_fn'],
-                            out_fn='VRNN-generation/data/embeddings/fasttext-wiki.pkl',
-                            extern_vocab=[w for w, _ in (readers['train'].all_words.most_common(5000) +\
+                            out_fn='VRNN/data/embeddings/fasttext-wiki.pkl',
+                            extern_vocab=[w for w, _ in (readers['train'].all_words.most_common(5000) +
                                                          readers['valid'].all_words.most_common(5000))])
     embeddings.add_tokens_rnd(delexicalizer.all_tags)
     config['device'] = torch.device(config['device_name'])
