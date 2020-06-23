@@ -1,6 +1,9 @@
 from abc import ABC
 from collections import Counter
 
+from ..utils import tokenize
+
+
 class TurnRecord:
     def __init__(self,
                  turn_number,
@@ -98,6 +101,17 @@ class TurnRecord:
                         gt_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
                 relative_line += 1
 
+    @staticmethod
+    def _tk_generator(records):
+        for r in records:
+            prior_z_str = ' '.join([str(tk) for tk in list(zip(*r.prior_z_vector))[1]])
+            posterior_z_str = ' '.join([str(tk) for tk in list(zip(*r.posterior_z_vector))[1]])
+            utt_tk = tokenize(r.gt_utterance)
+            utt = [tk.strip(' ?!,.') for tk in utt_tk]
+            utt = [tk for tk in utt if len(tk) > 0]
+            yield None, prior_z_str, posterior_z_str
+            for tk in utt:
+                yield tk, prior_z_str, posterior_z_str
 
 class Evaluator(ABC):
     def eval_from_dir(self, directory, role=None):

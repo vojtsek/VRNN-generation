@@ -366,11 +366,15 @@ class VRNN(pl.LightningModule):
                             for k in outputs[0].keys() if k != 'log'}
         return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
-    def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, ground_truths, inv_vocab):
-        for i, uo in enumerate(outputs):
-            ud_reference = reference_dials[i].transpose(1, 0)[:uo.shape[0], :uo.shape[1]].cpu().numpy()
-            uo = torch.argmax(uo, dim=2).cpu().numpy()
-            predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in uo])
+    def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, top_scores, ground_truths, inv_vocab):
+        for i, output in enumerate(outputs):
+            ud_reference = reference_dials[i].transpose(1, 0)[:output.shape[0], :output.shape[1]].cpu().numpy()
+            max_score, max_idx = torch.max(output, dim=2)
+            max_idx = max_idx.cpu().numpy()
+            max_score = max_score.detach().cpu().numpy()
+            if top_scores is not None:
+                top_scores.append([str(s) for s in np.exp(max_score)])
+            predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in max_idx])
             ground_truths.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
 
     def predict(self, batch, inv_vocab=None):
@@ -382,27 +386,33 @@ class VRNN(pl.LightningModule):
         all_system_predictions, all_system_gt = [], []
         all_usr_nlu_predictions, all_usr_nlu_gt = [], []
         all_sys_nlu_predictions, all_sys_nlu_gt = [], []
+        all_user_top_scores = []
+        all_system_top_scores = []
         self._post_process_forwarded_batch(step_output.user_outputs,
                                            step_output.user_dials,
                                            all_user_predictions,
+                                           all_user_top_scores,
                                            all_user_gt,
                                            inv_vocab)
 
         self._post_process_forwarded_batch(step_output.usr_nlu_outputs,
                                            step_output.usr_nlu_dials,
                                            all_usr_nlu_predictions,
+                                           None,
                                            all_usr_nlu_gt,
                                            inv_vocab)
 
         self._post_process_forwarded_batch(step_output.sys_nlu_outputs,
                                            step_output.sys_nlu_dials,
                                            all_sys_nlu_predictions,
+                                           all_system_top_scores,
                                            all_sys_nlu_gt,
                                            inv_vocab)
 
         self._post_process_forwarded_batch(step_output.system_outputs,
                                            step_output.system_dials,
                                            all_system_predictions,
+                                           None,
                                            all_system_gt,
                                            inv_vocab)
 
@@ -418,11 +428,14 @@ class VRNN(pl.LightningModule):
                                all_usr_nlu_gt,
                                all_sys_nlu_predictions,
                                all_sys_nlu_gt,
+                               all_user_top_scores,
+                               all_system_top_scores,
                                all_samples,
                                all_p_samples_matrix,
                                all_q_samples_matrix,
                                all_user_samples_matrix,
-                               step_output.db_data)
+                               step_output.db_data,
+                               step_output)
 
     def configure_optimizers(self):
         prior_parameters = []
@@ -554,11 +567,14 @@ class PredictedOuputs:
                  all_usr_nlu_gt=None,
                  all_sys_nlu_predictions=None,
                  all_sys_nlu_gt=None,
+                 all_user_scores=None,
+                 all_system_scores=None,
                  all_z_samples=None,
                  all_p_z_samples_matrix=None,
                  all_q_z_samples_matrix=None,
                  all_user_z_samples_matrix=None,
-                 db_data=None):
+                 db_data=None,
+                 raw_step_output=None):
         self.all_user_predictions = all_user_predictions
         self.all_user_gt = all_user_gt
         self.all_system_predictions = all_system_predictions
@@ -567,8 +583,11 @@ class PredictedOuputs:
         self.all_sys_nlu_predictions = all_sys_nlu_predictions
         self.all_sys_nlu_gt = all_sys_nlu_gt
         self.all_system_gt = all_system_gt
+        self.all_user_scores = all_user_scores
+        self.all_system_scores = all_system_scores
         self.all_z_samples = all_z_samples
         self.all_p_z_samples_matrix = all_p_z_samples_matrix
         self.all_q_z_samples_matrix = all_q_z_samples_matrix
         self.all_user_z_samples_matrix = all_user_z_samples_matrix
         self.db_data = db_data
+        self.raw_step_output = raw_step_output

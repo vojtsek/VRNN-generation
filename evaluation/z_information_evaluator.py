@@ -2,12 +2,9 @@ import os
 import numpy as np
 
 from .commons import Evaluator, TurnRecord, CorpusVocab
-from ..utils import tokenize
-
 
 class ZInfoEvaluator(Evaluator):
     def __init__(self, fn):
-        self.bleu_score = 0
         self.fn = fn
         self.data_vocab = CorpusVocab()
         self.prior_z_vocab = CorpusVocab()
@@ -28,20 +25,8 @@ class ZInfoEvaluator(Evaluator):
     def _make_pair(tk, z_str):
         return f'{z_str}-{tk}'
 
-    @staticmethod
-    def _tk_generator(records):
-        for r in records:
-            prior_z_str = ' '.join([str(tk) for tk in list(zip(*r.prior_z_vector))[1]])
-            posterior_z_str = ' '.join([str(tk) for tk in list(zip(*r.posterior_z_vector))[1]])
-            utt_tk = tokenize(r.gt_utterance)
-            utt = [tk.strip(' ?!,.') for tk in utt_tk]
-            utt = [tk for tk in utt if len(tk) > 0]
-            yield None, prior_z_str, posterior_z_str
-            for tk in utt:
-                yield tk, prior_z_str, posterior_z_str
-
     def _fill_vocabs(self):
-        for tk, prior, posterior in ZInfoEvaluator._tk_generator(self.records):
+        for tk, prior, posterior in TurnRecord._tk_generator(self.records):
             if tk is None:
                 self.prior_z_vocab.add_element(prior)
                 self.posterior_z_vocab.add_element(posterior)
@@ -51,7 +36,7 @@ class ZInfoEvaluator(Evaluator):
 
     def compute_mi(self):
         mi = 0
-        for tk, z_prior, z_posterior in ZInfoEvaluator._tk_generator(self.records):
+        for tk, z_prior, z_posterior in TurnRecord._tk_generator(self.records):
             joint = self.joint_vocab.element_prob(ZInfoEvaluator._make_pair(tk, z_prior))
             el_mi = np.log(joint)\
                  - np.log(self.data_vocab.element_prob(tk))\
@@ -61,7 +46,7 @@ class ZInfoEvaluator(Evaluator):
 
     def compute_kl(self):
         kl = 0
-        for tk, z_prior, z_posterior in ZInfoEvaluator._tk_generator(self.records):
+        for tk, z_prior, z_posterior in TurnRecord._tk_generator(self.records):
             el_kl = np.log(self.posterior_z_vocab.element_prob((z_posterior)))\
                     - np.log(self.prior_z_vocab.element_prob(z_prior))
             kl += self.posterior_z_vocab.element_prob(z_posterior) * el_kl

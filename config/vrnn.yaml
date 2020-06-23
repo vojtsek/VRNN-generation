@@ -1,14 +1,14 @@
 # data settings
 data_type: 'raw'
-#data_dir: 'VRNN/data/camrest'
-#domain: 'camrest'
-data_dir: 'VRNN/data/SMD'
-domain: 'smd'
+data_dir: 'VRNN/data/camrest'
+domain: 'camrest'
+#data_dir: 'VRNN/data/SMD'
+#domain: 'smd'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.vec'
 # general settings
-device_name: 'cuda:0'
+device_name: 'cpu:0'
 batch_size: 8
 drop_prob: 0.7
 lr_decay_rate: 0.98
@@ -24,7 +24,7 @@ prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
 use_copynet: true
-use_attention: false
+use_attention: true
 with_bpr: false
 with_bow_loss: false
 fake_prior: false

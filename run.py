@@ -2,7 +2,7 @@ import argparse
 import json
 import time
 import os
-import sys
+import pickle
 import shutil
 import random
 
@@ -137,10 +137,15 @@ def run_evaluation(output_dir, model, dataset, device):
             open(os.path.join(output_dir, 'nlu_ground_truth.txt'), 'wt') as nlu_gt_fd, \
             open(os.path.join(output_dir, 'z_posterior.txt'), 'wt') as z_post_fd, \
             open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd, \
-            open(os.path.join(output_dir, 'z_user.txt'), 'wt') as z_user_fd:
+            open(os.path.join(output_dir, 'z_user.txt'), 'wt') as z_user_fd, \
+            open(os.path.join(output_dir, 'raw_scores.pkl'), 'wb') as scores_fd, \
+            open(os.path.join(output_dir, 'id2w_vocab.pkl'), 'wb') as inv_vocab_fd, \
+            open(os.path.join(output_dir, 'w2id_vocab.pkl'), 'wb') as vocab_fd:
 
+        raw_scores = []
         for d, val_batch in enumerate(loader):
             predictions = model.predict(val_batch)
+            raw_scores.append([p.detach().numpy() for p in predictions.raw_step_output.system_outputs])
             assert len(predictions.all_user_predictions) ==\
                 len(predictions.all_system_predictions) ==\
                 len(predictions.all_z_samples)
@@ -148,9 +153,11 @@ def run_evaluation(output_dir, model, dataset, device):
             for i in range(len(predictions.all_user_predictions)):
                 print(f'\tTurn {i+1}', file=all_fd)
                 print(f'\tUSER HYP:{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
+                print(f'\tUSER SCORES:{" ".join(predictions.all_user_scores[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_usr_nlu_predictions[i])}', file=all_fd)
                 print(f'\tSYS HYP:{" ".join(predictions.all_system_predictions[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_sys_nlu_predictions[i])}', file=all_fd)
+                print(f'\tSYS SCORES:{" ".join(predictions.all_system_scores[i])}', file=all_fd)
                 print(f'\tUSER GT{" ".join(predictions.all_user_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_usr_nlu_gt[i])}', file=all_fd)
                 print(f'\tSYS GT:{" ".join(predictions.all_system_gt[i])}', file=all_fd)
@@ -178,6 +185,9 @@ def run_evaluation(output_dir, model, dataset, device):
             print('', file=z_post_fd)
             print('', file=z_prior_fd)
             print('=' * 80, file=all_fd)
+        pickle.dump(raw_scores, scores_fd)
+        pickle.dump(model.embeddings.id2w, inv_vocab_fd)
+        pickle.dump(model.embeddings.w2id, vocab_fd)
 
 
 if __name__ == '__main__':
