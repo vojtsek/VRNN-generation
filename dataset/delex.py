@@ -1,5 +1,6 @@
 import json
 import os
+import re
 
 
 class Delexicalizer:
@@ -13,18 +14,26 @@ class Delexicalizer:
         self.all_tags = set()
         if os.path.exists(otgy_file):
             with open(otgy_file, 'rt') as fd:
-                self.otgy = json.load(fd)
+                self.otgy = self._load_otgy(fd)
         if os.path.exists(db_file):
             with open(db_file, 'rt') as fd:
                 self.db = json.load(fd)
 
+    def _load_otgy(self, fd):
+        otgy = json.load(fd)
+        for ent in otgy:
+            ent = ent.replace(' ', '-')
+            otgy[ent] = [str(val) for val in otgy[ent]]
+        return otgy
+
     def delex_utterance(self, utt):
         utt = utt.lower()
         self.found_tags = []
-        # if self.otgy is not None:
-        #     utt = self._replace_otgy(utt)
+        if self.otgy is not None:
+            utt = self._replace_otgy(utt)
         if self.db is not None:
             utt = self._replace_db(utt)
+        utt = re.sub(r'\d+', '<NUM>', utt)
         return utt, self.found_tags
 
     def _replace_otgy(self, utt):

@@ -380,7 +380,7 @@ class CarsluReader:
 
 class SMDReader:
 
-    def parse_dialogues(self, data, delex=None):
+    def parse_dialogues(self, data, delexicalizer=None):
         for dial in data:
             dialogue = Dialogue()
             turns = dial['dialogue']
@@ -388,7 +388,7 @@ class SMDReader:
             for t in turns:
                 tt = t['turn']
                 if tt == 'driver':
-                    turn = Turn()
+                    turn = Turn(delexicalizer)
                     turn.add_user(t['data']['utterance'])
                 elif turn is not None:
                     turn.add_system(t['data']['utterance'])
