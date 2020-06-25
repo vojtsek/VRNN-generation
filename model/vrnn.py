@@ -405,14 +405,14 @@ class VRNN(pl.LightningModule):
         self._post_process_forwarded_batch(step_output.sys_nlu_outputs,
                                            step_output.sys_nlu_dials,
                                            all_sys_nlu_predictions,
-                                           all_system_top_scores,
+                                           None,
                                            all_sys_nlu_gt,
                                            inv_vocab)
 
         self._post_process_forwarded_batch(step_output.system_outputs,
                                            step_output.system_dials,
                                            all_system_predictions,
-                                           None,
+                                           all_system_top_scores,
                                            all_system_gt,
                                            inv_vocab)
 
