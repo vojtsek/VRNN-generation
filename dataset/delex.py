@@ -41,7 +41,8 @@ class Delexicalizer:
             for val in values:
                 val = val.lower()
                 if val in utt:
-                    utt = utt.replace(val, self._make_tag(slot))
+                    utt = re.sub(r'' + val + '\w*', self._make_tag(slot), utt)
+                    break
         return utt
 
     def _replace_db(self, utt):

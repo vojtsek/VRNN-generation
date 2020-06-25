@@ -21,6 +21,8 @@ if __name__ == '__main__':
 
     with open(args.data_fn, 'rt') as fd:
         data = json.load(fd)
+    if isinstance(data, dict):
+        data = list(data.values())
     data = np.array(data)[np.random.permutation(len(data))]
     test_size = int(np.floor(test_size * len(data)))
     train_size = int(np.floor(train_size * len(data)))
