@@ -21,10 +21,11 @@ class Delexicalizer:
 
     def _load_otgy(self, fd):
         otgy = json.load(fd)
+        new_otgy = dict()
         for ent in otgy:
-            ent = ent.replace(' ', '-')
-            otgy[ent] = [str(val) for val in otgy[ent]]
-        return otgy
+            new_ent = ent.replace(' ', '-')
+            new_otgy[new_ent] = [str(val) for val in otgy[ent]]
+        return new_otgy
 
     def delex_utterance(self, utt):
         utt = utt.lower()

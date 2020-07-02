@@ -12,11 +12,12 @@ from .commons import Evaluator, TurnRecord
 
 class ZSemanticEvaluator(Evaluator):
 
-    def __init__(self):
+    def __init__(self, fn):
         self.bleu_score = 0
+        self.fn = fn
 
     def eval_from_dir(self, directory, role=None):
-        fn = os.path.join(directory, f'output_all.txt')
+        fn = os.path.join(directory, self.fn)
         records = []
         slot_map = dict()
         TurnRecord.parse(fn, records, slot_map, role)

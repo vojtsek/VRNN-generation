@@ -248,7 +248,7 @@ class MultiWOZReader:
         self.allowed_domains = allowed_domains
 
     def parse_dialogues(self, data, delexicalizer=None):
-        for dial in data.values():
+        for dial in data:
             dialogue = Dialogue()
             turns = dial['log']
             i = 0

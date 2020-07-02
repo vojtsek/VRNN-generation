@@ -1,5 +1,6 @@
 import os
 import pickle
+import re
 
 import numpy as np
 
@@ -16,10 +17,14 @@ class PPLEvaluator(Evaluator):
 
     def eval_from_dir(self, directory, role='system'):
         fn = os.path.join(directory, self.fn)
+        mtch = re.match(r'\D*(\d+)\D*', self.fn)
+        no = '0'
+        if mtch is not None:
+            no = mtch.group(1)
         slot_map = dict()
         TurnRecord.parse(fn, self.records, slot_map, role)
         with open(os.path.join(directory, 'w2id_vocab.pkl'), 'rb') as vocab_fd, \
-                open(os.path.join(directory, 'raw_scores.pkl'), 'rb') as scores_fd:
+                open(os.path.join(directory, f'raw_scores_{no}.pkl'), 'rb') as scores_fd:
             self.vocab = pickle.load(vocab_fd)
             self.scores = pickle.load(scores_fd)
         ppl = self._compute_ppl()

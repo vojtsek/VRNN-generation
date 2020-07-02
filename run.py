@@ -138,7 +138,7 @@ def run_evaluation(output_dir, model, dataset, device):
             open(os.path.join(output_dir, 'z_posterior.txt'), 'wt') as z_post_fd, \
             open(os.path.join(output_dir, 'z_prior.txt'), 'wt') as z_prior_fd, \
             open(os.path.join(output_dir, 'z_user.txt'), 'wt') as z_user_fd, \
-            open(os.path.join(output_dir, 'raw_scores.pkl'), 'wb') as scores_fd, \
+            open(os.path.join(output_dir, f'raw_scores_{model.epoch_number}.pkl'), 'wb') as scores_fd, \
             open(os.path.join(output_dir, 'id2w_vocab.pkl'), 'wb') as inv_vocab_fd, \
             open(os.path.join(output_dir, 'w2id_vocab.pkl'), 'wb') as vocab_fd:
 
