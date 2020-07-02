@@ -2,15 +2,16 @@
 data_type: 'raw'
 #data_dir: 'VRNN-generation/data/camrest'
 #domain: 'camrest'
-data_dir: 'VRNN-generation/data/smd'
+data_dir: 'VRNN/data/smd'
 domain: 'smd'
 #data_dir: 'VRNN/data/woz-hotel'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
-embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
+embedding_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
+embedding_out_fn: 'VRNN/data/embeddings/fasttext-wiki.pkl'
 # general settings
-device_name: 'cuda:0' # cpu|cuda
+device_name: 'cpu:0' # cpu|cuda
 batch_size: 8
+activation: 'tanh' # tanh|relu|sigmoid
 drop_prob: 0.75
 lr_decay_rate: 0.98
 init_gumbel_softmax_tmp: 2.0

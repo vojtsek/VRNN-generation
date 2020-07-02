@@ -257,6 +257,9 @@ class VRNN(pl.LightningModule):
         # torch.cuda.empty_cache()
         return ce + kl
 
+    def set_force(self, force):
+        self.vae_cell.set_force(force)
+
     def _step(self, batch, optimizer_idx=0):
         user_dials, system_dials, usr_nlu_dials, sys_nlu_dials, user_lens,\
         system_lens, usr_nlu_lens, sys_nlu_lens, db_res, dial_lens = batch

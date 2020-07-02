@@ -13,7 +13,8 @@ class RNNDecoder(torch.nn.Module):
 
     def __init__(self, embeddings, init_hidden_size,
                  hidden_size, encoder_hidden_size=None, concat_size=None, use_attention=False,
-                 padding_idx=0, bos_idx=0, teacher_prob=0.7, drop_prob=0.0, use_copy=False, device=torch.device('cpu:0')):
+                 padding_idx=0, bos_idx=0, teacher_prob=0.7,
+                 drop_prob=0.0, use_copy=False, device=torch.device('cpu:0')):
         super(RNNDecoder, self).__init__()
         self.embeddings = embeddings.to(device)
         self.device = device
@@ -40,6 +41,7 @@ class RNNDecoder(torch.nn.Module):
         if self.use_copy:
             self.copy_weights = torch.nn.Linear(encoder_hidden_size, hidden_size)
         self.teacher_prob = teacher_prob
+        self.force = False
 
     def forward_step(self,
                      input_tk_idx,
@@ -127,7 +129,7 @@ class RNNDecoder(torch.nn.Module):
             outputs.append(output)
             last_decoder = torch.argmax(projected_output, dim=2)
             # teacher forcing
-            if not self.training or np.random.rand(1) < self.teacher_prob:
+            if not self.force and (not self.training or np.random.rand(1) < self.teacher_prob):
                 next_input_idx = last_decoder
             else:
                 next_input_idx = trg_embed[:, i].unsqueeze(0)

@@ -97,6 +97,12 @@ class VAECell(torch.nn.Module):
 
     #     todo: activation f?
 
+    def set_force(self, force):
+        self.user_dec.force = force
+        self.usr_nlu_dec.force = force
+        self.system_dec.force = force
+        self.sys_nlu_dec.force = force
+
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
                   z_nets, decoders, z_previous, use_prior, db_res=None,
                   copy_dials_idx=None, copy_encoder_hiddens=None, prev_output=None):

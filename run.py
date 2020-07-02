@@ -189,6 +189,16 @@ def run_evaluation(output_dir, model, dataset, device):
         pickle.dump(model.embeddings.id2w, inv_vocab_fd)
         pickle.dump(model.embeddings.w2id, vocab_fd)
 
+        raw_scores = []
+        # here we run prediction again with teacher_forcing so we can measure perplexity from the scores
+        model.set_force(True)
+        loader = TorchDataLoader(dataset, batch_size=1, shuffle=False)
+        for d, val_batch in enumerate(loader):
+            predictions = model.predict(val_batch)
+            raw_scores.append([p.cpu().detach().numpy() for p in predictions.raw_step_output.system_outputs])
+        pickle.dump(raw_scores, scores_fd)
+        model.set_force(False)
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
