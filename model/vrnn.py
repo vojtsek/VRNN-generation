@@ -498,8 +498,8 @@ class EpochEndCb(pl.Callback):
         model.vae_cell.epoch_number += 1
         init_tau = model.config['init_gumbel_softmax_tmp']
         gumbel_tmp_step = np.exp(np.log(0.001 / init_tau) / model.config['min_epochs'])
-        model.config['gumbel_softmax_tmp'] *= \
-            gumbel_tmp_step ** min(model.epoch_number, model.config['min_epochs'])
+        #model.config['gumbel_softmax_tmp'] *= \
+        #    gumbel_tmp_step ** min(model.epoch_number, model.config['min_epochs'])
         # model.lr_scheduler.step()
 
 
