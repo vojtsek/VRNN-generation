@@ -3,7 +3,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from .attention import DotProjectionAttention
-from ..utils import embed_oh
+from ..utils import embed_oh, get_activation
 
 torch.manual_seed(0)
 np.random.seed(0)
@@ -14,12 +14,14 @@ class RNNDecoder(torch.nn.Module):
     def __init__(self, embeddings, init_hidden_size,
                  hidden_size, encoder_hidden_size=None, concat_size=None, use_attention=False,
                  padding_idx=0, bos_idx=0, teacher_prob=0.7,
-                 drop_prob=0.0, use_copy=False, device=torch.device('cpu:0')):
+                 drop_prob=0.0, use_copy=False, device=torch.device('cpu:0'),
+                 activation='tanh'):
         super(RNNDecoder, self).__init__()
         self.embeddings = embeddings.to(device)
         self.device = device
         self.padding_idx = padding_idx
         self.bos_idx = bos_idx
+        self.activation = get_activation(activation)
         self.vocab_size = embeddings.num_embeddings
         rnn_input_dim = embeddings.embedding_dim + concat_size if concat_size is not None else embeddings.embedding_dim
         self.concat = concat_size is not None
@@ -74,7 +76,7 @@ class RNNDecoder(torch.nn.Module):
         if not self.use_copy:
             return output, hidden, output_proba
         else:
-            u_copy_score = F.tanh(self.copy_weights(encoder_hidden_states.transpose(0, 1)))  # [B,T,H]
+            u_copy_score = self.activation(self.copy_weights(encoder_hidden_states.transpose(0, 1)))  # [B,T,H]
             # stable version of copynet
             u_copy_score = torch.matmul(u_copy_score, output_drop.squeeze(0).unsqueeze(2)).squeeze(2)
             u_copy_score_max, _ = torch.max(u_copy_score, dim=1, keepdim=True)
@@ -148,5 +150,5 @@ class RNNDecoder(torch.nn.Module):
 
         if encoder_final is None:
             return None  # start with zeros
-        bridged = torch.tanh(self.bridge(encoder_final))
+        bridged = self.activation(self.bridge(encoder_final))
         return (bridged.unsqueeze(0), bridged.unsqueeze(0))

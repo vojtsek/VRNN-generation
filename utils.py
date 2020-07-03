@@ -77,9 +77,23 @@ def gumbel_softmax_sample(logits, temperature, hard=False, device=torch.device('
     return y
 
 
-
-
 def normal_sample(mu, logvar, device):
     std = torch.exp(0.5 * logvar)
     eps = torch.randn_like(std).to(device)
     return eps * std + mu
+
+
+def exponential_delta(initial, final, total_steps, current_step):
+    step = np.exp(np.log(final / initial) / total_steps)
+    current_step = min(current_step, total_steps)
+    value = initial * step ** min(current_step, total_steps)
+    return value
+
+
+def get_activation(activation):
+    if activation == 'sigmoid':
+        return torch.sigmoid
+    elif activation == 'relu':
+        return torch.relu
+    else: # default
+        return torch.tanh

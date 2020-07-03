@@ -7,7 +7,7 @@ from torch.utils.data import DataLoader
 
 from . import VAECell
 from ..dataset.embedding import Embeddings
-from ..utils import zero_hidden
+from ..utils import zero_hidden, exponential_delta
 
 
 class VRNN(pl.LightningModule):
@@ -309,12 +309,14 @@ class VRNN(pl.LightningModule):
         final_sys_kl_term = 10
         increase_start_epoch = 10
         # exponential decrease
-        step_usr = np.exp(np.log(final_usr_kl_term / self.config['init_KL_term']) / self.config['min_epochs'])
-        step_system = np.exp(np.log(final_sys_kl_term / self.config['init_KL_term']) / self.config['min_epochs'])
-        lambda_usr_kl = self.config['init_KL_term'] *\
-                        step_usr ** min(max(self.epoch_number - increase_start_epoch, 0), self.config['min_epochs'])
-        lambda_sys_kl = self.config['init_KL_term'] *\
-                        step_system ** min(max(self.epoch_number - increase_start_epoch, 0), self.config['min_epochs'])
+        lambda_usr_kl = exponential_delta(initial=self.config['init_KL_term'],
+                                          final=final_usr_kl_term,
+                                          total_steps=self.config['min_epochs'],
+                                          current_step=max(self.epoch_number - increase_start_epoch, 0))
+        lambda_sys_kl = exponential_delta(initial=self.config['init_KL_term'],
+                                          final=final_sys_kl_term,
+                                          total_steps=self.config['min_epochs'],
+                                          current_step=max(self.epoch_number - increase_start_epoch, 0))
 
         # step = (final_kl_term - self.config['init_KL_term']) / min_epochs
         # lambda_kl = self.config['init_KL_term'] +\

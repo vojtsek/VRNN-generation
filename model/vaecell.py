@@ -3,7 +3,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import numpy as np
 from . import FFNet, RNNDecoder
 from .z_net import ZNet
-from ..utils import zero_hidden, embed_oh
+from ..utils import zero_hidden, embed_oh, exponential_delta
 
 torch.manual_seed(0)
 
@@ -47,7 +47,8 @@ class VAECell(torch.nn.Module):
                                    # use_copy=self.config['use_copynet'],
                                    use_attention=self.config['use_attention'],
                                    drop_prob=config['drop_prob'],
-                                   device=self.config['device'])
+                                   device=self.config['device'],
+                                   activation=self.config['activation'])
 
         self.usr_nlu_dec = RNNDecoder(embeddings,
                                       config['user_z_total_size'] +
@@ -59,7 +60,8 @@ class VAECell(torch.nn.Module):
                                       use_copy=self.config['use_copynet'],
                                       use_attention=self.config['use_attention'],
                                       drop_prob=config['drop_prob'],
-                                      device=self.config['device'])
+                                      device=self.config['device'],
+                                      activation=self.config['activation'])
 
         self.sys_nlu_dec = RNNDecoder(embeddings,
                                       # config['user_z_total_size'] +
@@ -71,7 +73,8 @@ class VAECell(torch.nn.Module):
                                       config['system_decoder_hidden_size'],
                                       teacher_prob=config['teacher_forcing_prob'],
                                       drop_prob=config['drop_prob'],
-                                      device=self.config['device'])
+                                      device=self.config['device'],
+                                      activation=self.config['activation'])
 
         self.system_dec = RNNDecoder(embeddings,
                                      # config['user_z_total_size'] +
@@ -89,10 +92,12 @@ class VAECell(torch.nn.Module):
                                      bos_idx=self.vocab.w2id[self.vocab.BOS],
                                      use_copy=self.config['use_copynet'],
                                      use_attention=self.config['use_attention'],
-                                     device=self.config['device'])
+                                     device=self.config['device'],
+                                     activation=self.config['activation'])
+
         self.bow_projection = FFNet(config['user_z_logits_dim'] + config['vrnn_hidden_size'],
                                     [config['bow_layer_size'], embeddings.num_embeddings],
-                                    activations=[None, torch.relu],
+                                    activations=[None, self.config['activation']],
                                     drop_prob=config['drop_prob'])
 
     #     todo: activation f?
@@ -154,10 +159,10 @@ class VAECell(torch.nn.Module):
 
         copy_coeff = 0
         if self.epoch_number >= self.config['copy_start_epoch']:
-            copy_coeff_initial = 1e-3
-            step = np.exp(np.log(1 / copy_coeff_initial) / 10)
-            copy_coeff = copy_coeff_initial * \
-                         step ** min(max(self.epoch_number - self.config['copy_start_epoch'], 0), self.config['min_epochs'])
+            copy_coeff = exponential_delta(initial=1e-5,
+                                           final=1,
+                                           total_steps=self.config['min_epochs'],
+                                           current_step=max(self.epoch_number - self.config['copy_start_epoch'], 0))
             copy_coeff = torch.from_numpy(np.array(copy_coeff))
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
