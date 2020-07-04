@@ -2,6 +2,7 @@ import argparse
 import json
 import time
 import os
+import sys
 import pickle
 import shutil
 import random
@@ -27,12 +28,37 @@ torch.manual_seed(seed)
 random.seed(seed)
 
 
-def main(flags):
-    with open(flags.config, 'rt') as in_fd:
-        config = yaml.load(in_fd, Loader=yaml.FullLoader)
+def _parse_from_arg(arg):
+    val = arg
+    parsed = False
+    if '.' in val: # could be float
+        try:
+            val = float(val)
+            parsed = True
+        except:
+            pass # remain string
+    else: # not float
+        try:
+            val = int(val) # could be int
+            parsed = True
+        except:
+            pass
+    if not parsed: # not int nor float
+        if val.lower() == 'false':
+            val = False
+        elif val.lower() == 'true':
+            val = True
+    return val
 
+
+def main(flags, config, config_path):
+    for fl in vars(flags):
+        if fl in config:
+            val = getattr(flags, fl)
+            if val is not None:
+                config[fl] = _parse_from_arg(val)
     delexicalizer = Delexicalizer(config['data_dir'])
-
+    print(config['batch_size'])
     sets = ['test', 'train', 'valid']
     readers = {}
     if config['domain'] == 'camrest':
@@ -59,7 +85,7 @@ def main(flags):
         output_dir += '_retrain'
     if not os.path.isdir(output_dir):
         os.makedirs(output_dir)
-    shutil.copy(flags.config, os.path.join(output_dir, 'conf.yaml'))
+    shutil.copy(config_path, os.path.join(output_dir, 'conf.yaml'))
 #    repo = Repo(os.path.dirname(sys.argv[0]))
 #    with open(os.path.join(output_dir, 'gitcommit.txt'), 'wt') as fd:
 #        print(f'{repo.head.commit}@{repo.active_branch}', file=fd)
@@ -201,11 +227,20 @@ def run_evaluation(output_dir, model, dataset, device):
 
 
 if __name__ == '__main__':
+    config_path = sys.argv[1]
+    for i in range(2,len(sys.argv)):
+        sys.argv[i-1] = sys.argv[i]
+    del sys.argv[-1]
     parser = argparse.ArgumentParser()
     parser.add_argument('--output_dir', type=str)
-    parser.add_argument('--config', type=str, required=True)
+    # parser.add_argument('--config', type=str, required=True)
     parser.add_argument('--model_path', type=str)
     parser.add_argument('--train_more', action='store_true')
-    args = parser.parse_args()
+    # args = parser.parse_args()
 
-    main(args)
+    with open(config_path, 'rt') as in_fd:
+        config = yaml.load(in_fd, Loader=yaml.FullLoader)
+    for key in config.keys():
+        parser.add_argument(f'--{key}', type=str, required=False, default=None)
+    args = parser.parse_args()
+    main(args, config, config_path)
