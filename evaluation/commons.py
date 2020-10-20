@@ -128,7 +128,14 @@ class CorpusVocab:
         self.vocab.update(elem)
 
     def element_prob(self, elem):
-        if elem not in self.vocab:
-            return 1e-15
-        else:
-            return self.vocab[elem] / sum(self.vocab.values())
+        prob = 1e-15
+        if isinstance(elem, str):
+            elem = elem.split()
+        for el in elem:
+            if el not in self.vocab:
+                prob = max(prob, 1e-15)
+                # prob = prob * 1e-15
+            else:
+                prob = max(prob, self.vocab[el] / sum(self.vocab.values()))
+                # prob = prob * self.vocab[el] / sum(self.vocab.values())
+        return prob

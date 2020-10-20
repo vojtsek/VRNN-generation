@@ -318,6 +318,7 @@ class VRNN(pl.LightningModule):
                                           total_steps=self.config['min_epochs'],
                                           current_step=max(self.epoch_number - increase_start_epoch, 0))
 
+        print(f'usr KL: {lambda_usr_kl}, sys KL: {lambda_sys_kl}')
         # step = (final_kl_term - self.config['init_KL_term']) / min_epochs
         # lambda_kl = self.config['init_KL_term'] +\
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
@@ -327,6 +328,7 @@ class VRNN(pl.LightningModule):
         else:
             loss = system_kl_loss + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
+        print(f'loss {loss}, usr_kl_loss {usr_kl_loss}, total_user_decoder_loss {total_user_decoder_loss}, system_kl_loss {system_kl_loss}, total_system_decoder_loss {total_system_decoder_loss}')
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
     def training_step(self, train_batch, batch_idx, optimizer_idx=0):
@@ -374,6 +376,7 @@ class VRNN(pl.LightningModule):
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, top_scores, ground_truths, inv_vocab):
         for i, output in enumerate(outputs):
             ud_reference = reference_dials[i].transpose(1, 0)[:output.shape[0], :output.shape[1]].cpu().numpy()
+            print(output.shape)
             max_score, max_idx = torch.max(output, dim=2)
             max_idx = max_idx.cpu().numpy()
             max_score = max_score.detach().cpu().numpy()

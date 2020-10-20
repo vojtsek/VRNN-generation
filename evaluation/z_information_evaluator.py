@@ -23,13 +23,18 @@ class ZInfoEvaluator(Evaluator):
 
     @staticmethod
     def _make_pair(tk, z_str):
-        return f'{z_str}-{tk}'
+        z_lst = z_str.split()
+        return [f'{i}-{zi}-{tk}' for i, zi in enumerate(z_lst)]
+
+    @staticmethod
+    def _make_vec(z_str):
+        return [f'{i}-{zi}' for i, zi in enumerate(z_str.split())]
 
     def _fill_vocabs(self):
         for tk, prior, posterior in TurnRecord._tk_generator(self.records):
             if tk is None:
-                self.prior_z_vocab.add_element(prior)
-                self.posterior_z_vocab.add_element(posterior)
+                self.prior_z_vocab.add_element(ZInfoEvaluator._make_vec(prior))
+                self.posterior_z_vocab.add_element(ZInfoEvaluator._make_vec(posterior))
                 continue
             self.data_vocab.add_element(tk)
             self.joint_vocab.add_element(ZInfoEvaluator._make_pair(tk, prior))
@@ -37,17 +42,24 @@ class ZInfoEvaluator(Evaluator):
     def compute_mi(self):
         mi = 0
         for tk, z_prior, z_posterior in TurnRecord._tk_generator(self.records):
+            if tk is None:
+                continue
             joint = self.joint_vocab.element_prob(ZInfoEvaluator._make_pair(tk, z_prior))
+#            print('joint', ZInfoEvaluator._make_pair(tk, z_prior), joint)
+#            print(tk, self.data_vocab.element_prob(tk))
+#            print('prior', self.prior_z_vocab.element_prob(ZInfoEvaluator._make_vec(z_prior)))
             el_mi = np.log(joint)\
                  - np.log(self.data_vocab.element_prob(tk))\
-                 - np.log(self.prior_z_vocab.element_prob(z_prior))
+                 - np.log(self.prior_z_vocab.element_prob(ZInfoEvaluator._make_vec(z_prior)))
             mi += joint * el_mi
         return mi
 
     def compute_kl(self):
         kl = 0
         for tk, z_prior, z_posterior in TurnRecord._tk_generator(self.records):
-            el_kl = np.log(self.posterior_z_vocab.element_prob((z_posterior)))\
-                    - np.log(self.prior_z_vocab.element_prob(z_prior))
-            kl += self.posterior_z_vocab.element_prob(z_posterior) * el_kl
+            if tk is None:
+                continue
+            el_kl = np.log(self.posterior_z_vocab.element_prob(ZInfoEvaluator._make_vec(z_posterior)))\
+                    - np.log(self.prior_z_vocab.element_prob(ZInfoEvaluator._make_vec(z_prior)))
+            kl += self.posterior_z_vocab.element_prob(ZInfoEvaluator._make_vec(z_posterior)) * el_kl
         return kl

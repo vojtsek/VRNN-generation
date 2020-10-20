@@ -36,14 +36,19 @@ class PPLEvaluator(Evaluator):
         for t, record in enumerate(self.records):
             turn_no = record.turn_number
             d += turn_no == 1
-            xent, n = self.xent_single_turn(record.gt_utterance, self.scores[d][turn_no - 1])
+            normalized_scores = np.array(self.scores[d][turn_no - 1])
+            normalized_scores = np.exp(normalized_scores) / np.sum(np.exp(normalized_scores), axis=2)
+            xent, n = self.xent_single_turn(record.gt_utterance, normalized_scores)
             xent_total += xent
             count += n
 
-        return np.exp(xent_total / count)
+        return np.exp(- xent_total / count)
 
     def xent_single_turn(self, gold, scores):
-        log_probs = [scores[i][0][self.vocab[tk.strip(' ?!,.')]] for
-                           i, tk in enumerate(tokenize(gold))]
+        for i, tk in enumerate(tokenize(gold)):
+            tk = tk.strip(' ?!,.')
+#            print(tk, self.vocab[tk], scores[i][0][self.vocab[tk]])
+        log_probs = [np.log(scores[i][0][self.vocab[tk.strip(' ?!,.')]]) for
+                     i, tk in enumerate(tokenize(gold))]
+        return sum(log_probs), len(log_probs)
 
-        return - sum(log_probs), len(log_probs)
