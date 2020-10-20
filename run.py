@@ -6,6 +6,7 @@ import sys
 import pickle
 import shutil
 import random
+import wandb
 
 import yaml
 from torchvision.transforms import Compose as TorchCompose
@@ -15,7 +16,6 @@ import torch
 import numpy
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
-from git import Repo
 
 from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
@@ -52,6 +52,7 @@ def _parse_from_arg(arg):
 
 
 def main(flags, config, config_path):
+    wandb.init(project='vrnn')
     for fl in vars(flags):
         if fl in config:
             val = getattr(flags, fl)

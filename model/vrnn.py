@@ -1,4 +1,5 @@
 import numpy as np
+import wandb
 import torch
 import torch.nn.functional as F
 import pytorch_lightning as pl
@@ -327,6 +328,7 @@ class VRNN(pl.LightningModule):
         else:
             loss = system_kl_loss + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
+        wandb.log({'epoch': self.vae_cell.epoch_number, 'loss': loss})
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
     def training_step(self, train_batch, batch_idx, optimizer_idx=0):
@@ -373,6 +375,7 @@ class VRNN(pl.LightningModule):
 
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, top_scores, ground_truths, inv_vocab):
         for i, output in enumerate(outputs):
+            print(output.shape)
             ud_reference = reference_dials[i].transpose(1, 0)[:output.shape[0], :output.shape[1]].cpu().numpy()
             max_score, max_idx = torch.max(output, dim=2)
             max_idx = max_idx.cpu().numpy()
