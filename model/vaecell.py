@@ -164,7 +164,6 @@ class VAECell(torch.nn.Module):
                                            total_steps=self.config['min_epochs'],
                                            current_step=max(self.epoch_number - self.config['copy_start_epoch'], 0))
             copy_coeff = torch.from_numpy(np.array(copy_coeff))
-            print(copy_coeff)
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
                 decoder(dials_idx,

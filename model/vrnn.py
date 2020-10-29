@@ -319,7 +319,6 @@ class VRNN(pl.LightningModule):
                                           total_steps=self.config['min_epochs'],
                                           current_step=max(self.epoch_number - increase_start_epoch, 0))
 
-        print(f'usr KL: {lambda_usr_kl}, sys KL: {lambda_sys_kl}')
         # step = (final_kl_term - self.config['init_KL_term']) / min_epochs
         # lambda_kl = self.config['init_KL_term'] +\
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
@@ -330,7 +329,6 @@ class VRNN(pl.LightningModule):
             loss = system_kl_loss + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
     # # print(f'loss {loss}, usr_kl_loss {usr_kl_loss}, total_user_decoder_loss {total_user_decoder_loss}, system_kl_loss {system_kl_loss}, total_system_decoder_loss {total_system_decoder_loss}')
-        wandb.log({'epoch': self.vae_cell.epoch_number, 'loss': loss})
         return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
 
     def training_step(self, train_batch, batch_idx, optimizer_idx=0):
@@ -344,6 +342,7 @@ class VRNN(pl.LightningModule):
                 'train_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
                 'train_kl_loss': (usr_kl_loss + system_kl_loss) / 2
                 }
+        wandb.log(logs)
         return {'loss': loss, 'log': logs}
 
     def validation_step(self, val_batch, batch_idx):
@@ -356,6 +355,7 @@ class VRNN(pl.LightningModule):
                 'valid_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
                 'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2
                 }
+        wandb.log(logs)
         return {'val_loss': loss,
                 'valid_user_kl_loss': usr_kl_loss,
                 'valid_user_decoder_loss': usr_decoder_loss,
@@ -377,9 +377,7 @@ class VRNN(pl.LightningModule):
 
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, top_scores, ground_truths, inv_vocab):
         for i, output in enumerate(outputs):
-            print(output.shape)
             ud_reference = reference_dials[i].transpose(1, 0)[:output.shape[0], :output.shape[1]].cpu().numpy()
-            print(output.shape)
             max_score, max_idx = torch.max(output, dim=2)
             max_idx = max_idx.cpu().numpy()
             max_score = max_score.detach().cpu().numpy()
@@ -388,8 +386,9 @@ class VRNN(pl.LightningModule):
             predictions.append([list(map(lambda x: inv_vocab[x], row))[0] for row in max_idx])
             ground_truths.append([list(map(lambda x: inv_vocab[x], row))[0] for row in ud_reference])
 
-    def predict(self, batch, inv_vocab=None):
+    def predict(self, batch, inv_vocab=None, force=False):
         # user_dials, system_dials, user_lens, system_lens, dial_lens = batch
+        self.vae_cell.set_force(force)
         step_output = self.forward(*batch)
         if inv_vocab is None:
             inv_vocab = self.embeddings.id2w

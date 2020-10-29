@@ -121,6 +121,7 @@ def main(flags, config, config_path):
         model.load_state_dict(checkpoint['state_dict'])
     else:
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
+    # wandb.watch(model)
     if flags.train_more or flags.model_path is None:
         config['retraining'] = flags.train_more
         callbacks = [EpochEndCb(), EvaluationCb(output_dir, valid_dataset)]
@@ -172,7 +173,8 @@ def run_evaluation(output_dir, model, dataset, device):
         raw_scores = []
         for d, val_batch in enumerate(loader):
             predictions = model.predict(val_batch)
-            raw_scores.append([p.cpu().detach().numpy() for p in predictions.raw_step_output.system_outputs])
+            score_predictions = model.predict(val_batch, force=True)
+            raw_scores.append([p.cpu().detach().numpy() for p in score_predictions.raw_step_output.system_outputs])
             assert len(predictions.all_user_predictions) ==\
                 len(predictions.all_system_predictions) ==\
                 len(predictions.all_z_samples)
@@ -215,15 +217,6 @@ def run_evaluation(output_dir, model, dataset, device):
         pickle.dump(raw_scores, scores_fd)
         pickle.dump(model.embeddings.id2w, inv_vocab_fd)
         pickle.dump(model.embeddings.w2id, vocab_fd)
-
-        raw_scores = []
-        # here we run prediction again with teacher_forcing so we can measure perplexity from the scores
-        model.set_force(True)
-        loader = TorchDataLoader(dataset, batch_size=1, shuffle=False)
-        for d, val_batch in enumerate(loader):
-            predictions = model.predict(val_batch)
-            raw_scores.append([p.cpu().detach().numpy() for p in predictions.raw_step_output.system_outputs])
-        pickle.dump(raw_scores, scores_fd)
         model.set_force(False)
 
 
