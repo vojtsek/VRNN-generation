@@ -121,7 +121,7 @@ def main(flags, config, config_path):
         model.load_state_dict(checkpoint['state_dict'])
     else:
         model = VRNN(config, embeddings, train_loader, valid_loader, test_loader)
-    # wandb.watch(model)
+    wandb.config.update(config)
     if flags.train_more or flags.model_path is None:
         config['retraining'] = flags.train_more
         callbacks = [EpochEndCb(), EvaluationCb(output_dir, valid_dataset)]
@@ -177,7 +177,7 @@ def run_evaluation(output_dir, model, dataset, device):
             predictions = model.predict(val_batch)
             score_predictions = model.predict(val_batch, force=True)
             xent, no_words = compute_ppl(score_predictions.raw_step_output.system_outputs,
-                                         predictions.all_system_predictions,
+                                         predictions.all_system_gt,
                                          model.embeddings.w2id,
                                          normalize_scores='softmax')
             total_xent += xent
@@ -225,8 +225,8 @@ def run_evaluation(output_dir, model, dataset, device):
 
 
         ppl = np.exp(- total_xent / examples_total)
-        print(ppl)
-        wandb.log({'val_ppl': ppl})
+        if model.epoch_number > 0:
+            wandb.log({'val_ppl': ppl})
         pickle.dump(raw_scores, scores_fd)
         pickle.dump(model.embeddings.id2w, inv_vocab_fd)
         pickle.dump(model.embeddings.w2id, vocab_fd)

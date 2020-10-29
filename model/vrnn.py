@@ -355,7 +355,6 @@ class VRNN(pl.LightningModule):
                 'valid_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
                 'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2
                 }
-        wandb.log(logs)
         return {'val_loss': loss,
                 'valid_user_kl_loss': usr_kl_loss,
                 'valid_user_decoder_loss': usr_decoder_loss,
@@ -370,6 +369,10 @@ class VRNN(pl.LightningModule):
         # outputs is an array with what you returned in validation_step for each batch
         # outputs = [{'loss': batch_0_loss}, {'loss': batch_1_loss}, ..., {'loss': batch_n_loss}]
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
+        logs = {metric: torch.stack([x[metric] for x in outputs]).mean()
+                for metric in ['val_loss', 'valid_user_kl_loss', 'valid_system_kl_loss', 'valid_kl_loss',
+                               'valid_system_decoder_loss', 'valid_decoder_loss']}
+        wandb.log(logs)
         for o in outputs:
             tensorboard_logs = {k: torch.stack([x[k] for x in outputs]).mean()
                             for k in outputs[0].keys() if k != 'log'}
