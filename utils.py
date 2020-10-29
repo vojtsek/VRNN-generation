@@ -97,3 +97,16 @@ def get_activation(activation):
         return torch.relu
     else: # default
         return torch.tanh
+
+
+def compute_ppl(prediction_scores, ground_truth, vocab, normalize_scores=None):
+    total, xent = 0, 0.0
+    for n, scores in enumerate(prediction_scores):
+        scores = scores.squeeze(1)
+        if normalize_scores == 'softmax':
+            scores = torch.softmax(scores, dim=1)
+        scores = scores.detach().numpy()
+        total += len(scores)
+        xent += np.sum([np.log(predicted_score[vocab[predicted_word]])
+                        for predicted_score, predicted_word in zip(scores, ground_truth[n])])
+    return xent, total

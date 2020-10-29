@@ -13,17 +13,17 @@ from torchvision.transforms import Compose as TorchCompose
 from torch.utils.data import DataLoader as TorchDataLoader
 import pytorch_lightning as pl
 import torch
-import numpy
+import numpy as np
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
 
 from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
-
+from .utils import compute_ppl
 from .model import VRNN, EpochEndCb, checkpoint_callback
 
 seed = 42
-numpy.random.seed(seed)
+np.random.seed(seed)
 torch.manual_seed(seed)
 random.seed(seed)
 
@@ -88,7 +88,7 @@ def main(flags, config, config_path):
         os.makedirs(output_dir)
     shutil.copy(config_path, os.path.join(output_dir, 'conf.yaml'))
 #    repo = Repo(os.path.dirname(sys.argv[0]))
-#    with open(os.path.join(output_dir, 'gitcommit.txt'), 'wt') as fd:
+#    with open(os.path.join(output_dir, 'gitcommit.txt'), 'wt') as fd:q
 #        print(f'{repo.head.commit}@{repo.active_branch}', file=fd)
 
     embeddings = Embeddings(config['embedding_fn'],
@@ -171,9 +171,17 @@ def run_evaluation(output_dir, model, dataset, device):
             open(os.path.join(output_dir, 'w2id_vocab.pkl'), 'wb') as vocab_fd:
 
         raw_scores = []
+        total_xent = 0.0
+        examples_total = 0
         for d, val_batch in enumerate(loader):
             predictions = model.predict(val_batch)
             score_predictions = model.predict(val_batch, force=True)
+            xent, no_words = compute_ppl(score_predictions.raw_step_output.system_outputs,
+                                         predictions.all_system_predictions,
+                                         model.embeddings.w2id,
+                                         normalize_scores='softmax')
+            total_xent += xent
+            examples_total += no_words
             raw_scores.append([p.cpu().detach().numpy() for p in score_predictions.raw_step_output.system_outputs])
             assert len(predictions.all_user_predictions) ==\
                 len(predictions.all_system_predictions) ==\
@@ -214,6 +222,11 @@ def run_evaluation(output_dir, model, dataset, device):
             print('', file=z_post_fd)
             print('', file=z_prior_fd)
             print('=' * 80, file=all_fd)
+
+
+        ppl = np.exp(- total_xent / examples_total)
+        print(ppl)
+        wandb.log({'val_ppl': ppl})
         pickle.dump(raw_scores, scores_fd)
         pickle.dump(model.embeddings.id2w, inv_vocab_fd)
         pickle.dump(model.embeddings.w2id, vocab_fd)
