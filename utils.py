@@ -84,7 +84,10 @@ def normal_sample(mu, logvar, device):
 
 
 def exponential_delta(initial, final, total_steps, current_step):
-    step = np.exp(np.log(final / initial) / total_steps)
+    if initial != 0:
+        step = np.exp(np.log(final / initial) / total_steps)
+    else:
+        step = 0
     current_step = min(current_step, total_steps)
     value = initial * step ** min(current_step, total_steps)
     return value

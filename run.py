@@ -17,6 +17,7 @@ import numpy as np
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
 
+from .evaluation.z_information_evaluator import ZInfoEvaluator
 from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 from .utils import compute_ppl
@@ -154,6 +155,7 @@ class EvaluationCb(pl.Callback):
 
 def run_evaluation(output_dir, model, dataset, device):
     model.eval()
+    z_evaluator = ZInfoEvaluator(f'output_all_{model.epoch_number}.txt')
     model = model.to(device)
     loader = TorchDataLoader(dataset, batch_size=1, shuffle=True)
     with open(os.path.join(output_dir, f'output_all_{model.epoch_number}.txt'), 'wt') as all_fd, \
@@ -225,12 +227,16 @@ def run_evaluation(output_dir, model, dataset, device):
 
 
         ppl = np.exp(- total_xent / examples_total)
-        if model.epoch_number > 0:
-            wandb.log({'val_ppl': ppl})
         pickle.dump(raw_scores, scores_fd)
         pickle.dump(model.embeddings.id2w, inv_vocab_fd)
         pickle.dump(model.embeddings.w2id, vocab_fd)
         model.set_force(False)
+    if model.epoch_number > 0:
+        wandb.log({'val_ppl': ppl})
+        mis = z_evaluator.eval_from_dir(output_dir)
+        for n, mi in enumerate(mis):
+            wandb.log({f'z{n}_MI': mi})
+        wandb.log({'z_MI_avg': np.mean(mis)})
 
 
 if __name__ == '__main__':

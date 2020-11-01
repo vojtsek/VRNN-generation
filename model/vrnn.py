@@ -98,6 +98,16 @@ class VRNN(pl.LightningModule):
         user_z_samples_matrix = []
         db_data = []
         bow_logits_list = []
+        copy_coeff = 0
+        if self.epoch_number >= self.config['copy_start_epoch'] and \
+            self.config['use_copynet']:
+            copy_coeff = exponential_delta(initial=1e-5,
+                                           final=1,
+                                           total_steps=self.config['min_epochs'],
+                                           current_step=max(self.epoch_number - self.config['copy_start_epoch'], 0))
+            copy_coeff = torch.from_numpy(np.array(copy_coeff))
+        wandb.log({'copy_coeff': copy_coeff})
+
         for bs in batch_sizes:
             use_prior = not self.training or np.random.rand(1) > self.config['z_teacher_forcing_prob']
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
@@ -109,7 +119,8 @@ class VRNN(pl.LightningModule):
                                        db_res_data[offset:offset+bs],
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
                                        user_z_previous[:bs], system_z_previous[:bs],
-                                       use_prior)
+                                       use_prior,
+                                       copy_coeff)
             db_data.append(db_res_data[offset:offset+bs])
             offset += bs
 
@@ -251,7 +262,7 @@ class VRNN(pl.LightningModule):
         q_diffs = torch.ones(*q_max.shape).to(self.config['device']) - q_max
         p_diffs = torch.ones(*p_max.shape).to(self.config['device']) - p_max
         # KL per each Z vector
-        kl = torch.sum(torch.mean(torch.sum(kl, dim=-1), dim=0))
+        kl = torch.mean(torch.mean(torch.sum(kl, dim=-1), dim=0))
         ce = F.nll_loss(log_p_z.transpose(2, 1), q_labels, reduction='mean')
         # print('KL, CE', kl, ce)
         del p_diffs, q_diffs
@@ -307,8 +318,8 @@ class VRNN(pl.LightningModule):
         del step_output.system_q_zs, step_output.system_p_zs, step_output.user_q_zs, step_output.user_p_zs, batch_sort_perm
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
         final_usr_kl_term = 1
-        final_sys_kl_term = 10
-        increase_start_epoch = 10
+        final_sys_kl_term = 1
+        increase_start_epoch = self.config['begin_kl_opt_epoch']
         # exponential decrease
         lambda_usr_kl = exponential_delta(initial=self.config['init_KL_term'],
                                           final=final_usr_kl_term,
@@ -318,13 +329,17 @@ class VRNN(pl.LightningModule):
                                           final=final_sys_kl_term,
                                           total_steps=self.config['min_epochs'],
                                           current_step=max(self.epoch_number - increase_start_epoch, 0))
+        if self.epoch_number < increase_start_epoch:
+            lambda_sys_kl = lambda_usr_kl = 0
 
         # step = (final_kl_term - self.config['init_KL_term']) / min_epochs
         # lambda_kl = self.config['init_KL_term'] +\
         #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
+        system_kl_loss *= lambda_sys_kl
+        usr_kl_loss *= lambda_usr_kl
         kl_loss = (system_kl_loss + usr_kl_loss) / 2
         if optimizer_idx == 0:
-            loss = decoder_loss + lambda_usr_kl * usr_kl_loss # + .1 * q_penalty
+            loss = decoder_loss + usr_kl_loss # + .1 * q_penalty
         else:
             loss = system_kl_loss + total_system_decoder_loss
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
@@ -376,6 +391,7 @@ class VRNN(pl.LightningModule):
         for o in outputs:
             tensorboard_logs = {k: torch.stack([x[k] for x in outputs]).mean()
                             for k in outputs[0].keys() if k != 'log'}
+
         return {'val_loss': avg_loss, 'log': tensorboard_logs}
 
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, top_scores, ground_truths, inv_vocab):
@@ -475,8 +491,11 @@ class VRNN(pl.LightningModule):
             torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_network, gamma=self.config['lr_decay_rate'])
 
         opts = [optimizer_network]
+        schedulers = [self.lr_scheduler]
         if not self.config['fake_prior']:
             opts.append(optimizer_prior)
+            schedulers.append(self.lr_scheduler)
+            #schedulers.append(torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_prior, gamma=self.config['lr_decay_rate']))
         return opts
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
@@ -485,7 +504,8 @@ class VRNN(pl.LightningModule):
             optimizer.step()
             optimizer.zero_grad()
         #
-        if optimizer_i == 1 and not self.config['fake_prior']:
+        if optimizer_i == 1 and not self.config['fake_prior'] and \
+            self.epoch_number <= self.config['stop_opt_z']:
             optimizer.step()
             optimizer.zero_grad()
 
@@ -509,6 +529,12 @@ class EpochEndCb(pl.Callback):
         #model.config['gumbel_softmax_tmp'] *= \
         #    gumbel_tmp_step ** min(model.epoch_number, model.config['min_epochs'])
         # model.lr_scheduler.step()
+        if model.epoch_number == model.config['stop_opt_z']:
+            for znet in model.vae_cell.system_z_nets:
+                for param in znet.parameters():
+                    param.requires_grad = False
+            for param in model.vae_cell.embedding_encoder.parameters():
+                param.requires_grad = False
 
 
 def checkpoint_callback(filepath):

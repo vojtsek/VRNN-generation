@@ -20,8 +20,9 @@ teacher_forcing_prob: 0.5
 z_teacher_forcing_prob: 0.5
 kl_to_ce: 1
 user_number_z_vectors: 1
-system_number_z_vectors: 3
-begin_kl_opt_epoch: 3
+system_number_z_vectors: 1
+begin_kl_opt_epoch: 1
+stop_opt_z: 50
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
@@ -41,10 +42,10 @@ k_loss_coeff: 0.1
 alpha_coeff_step: 0.5
 default_lambda_loss: 1.0
 # layer sizes
-input_encoder_hidden_size: 200
-user_decoder_hidden_size: 250
-system_decoder_hidden_size: 200
-vrnn_hidden_size: 300
+input_encoder_hidden_size: 250
+user_decoder_hidden_size: 100
+system_decoder_hidden_size: 250
+vrnn_hidden_size: 100
 posterior_ff_sizes1:
   - 200
 #  - 200

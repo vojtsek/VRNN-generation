@@ -1,6 +1,8 @@
 import torch
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import numpy as np
+import wandb
+
 from . import FFNet, RNNDecoder
 from .z_net import ZNet
 from ..utils import zero_hidden, embed_oh, exponential_delta
@@ -110,7 +112,8 @@ class VAECell(torch.nn.Module):
 
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
                   z_nets, decoders, z_previous, use_prior, db_res=None,
-                  copy_dials_idx=None, copy_encoder_hiddens=None, prev_output=None):
+                  copy_dials_idx=None, copy_encoder_hiddens=None, prev_output=None,
+                  copy_coeff=0):
         # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
         dials_idx = dials
         if db_res is not None:
@@ -157,13 +160,6 @@ class VAECell(torch.nn.Module):
                 # [previous_vrnn_hidden[0], last_hidden], dim=1)
         all_decoded_outputs = []
 
-        copy_coeff = 0
-        if self.epoch_number >= self.config['copy_start_epoch']:
-            copy_coeff = exponential_delta(initial=1e-5,
-                                           final=1,
-                                           total_steps=self.config['min_epochs'],
-                                           current_step=max(self.epoch_number - self.config['copy_start_epoch'], 0))
-            copy_coeff = torch.from_numpy(np.array(copy_coeff))
         for i, decoder in enumerate(decoders):
             outputs, last_decoder_hidden, decoded_outputs =\
                 decoder(dials_idx,
@@ -197,7 +193,7 @@ class VAECell(torch.nn.Module):
     def forward(self,
                 user_dials, user_lens, usr_nlu_lens, sys_nlu_lens,
                 system_dials, system_lens, db_res,
-                previous_vrnn_hidden, user_z_previous, system_z_previous, use_prior):
+                previous_vrnn_hidden, user_z_previous, system_z_previous, use_prior, copy_coeff):
         # encode user & system utterances
         encoder_init_state = zero_hidden((2,
                                           1 + int(self.config['bidirectional_encoder']),
@@ -211,6 +207,7 @@ class VAECell(torch.nn.Module):
                                                           self.user_z_nets,
                                                           [self.user_dec, self.usr_nlu_dec],
                                                           user_z_previous,
+                                                          copy_coeff=copy_coeff,
                                                           use_prior=False)
 
         system_turn_output, _ = self._z_module(system_dials,
@@ -224,7 +221,8 @@ class VAECell(torch.nn.Module):
                                                use_prior=use_prior,
                                                prev_output=user_turn_output,
                                                copy_dials_idx=user_dials_idx,
-                                               copy_encoder_hiddens=user_turn_output.encoder_hiddens
+                                               copy_encoder_hiddens=user_turn_output.encoder_hiddens,
+                                               copy_coeff=copy_coeff
                                                )
 
         system_sampled_z = system_turn_output.sampled_z
