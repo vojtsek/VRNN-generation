@@ -1,7 +1,9 @@
 import os
 import numpy as np
+from collections import Counter
 
 from .commons import Evaluator, TurnRecord, CorpusVocab
+
 
 class ZInfoEvaluator(Evaluator):
     def __init__(self, fn):
@@ -11,6 +13,7 @@ class ZInfoEvaluator(Evaluator):
         self.records = []
         self.prior_z_vocabs = None
         self.posterior_z_vocabs = None
+        self.z_vecs = []
 
     def eval_from_dir(self, directory, role='system'):
         fn = os.path.join(directory, self.fn)
@@ -41,13 +44,17 @@ class ZInfoEvaluator(Evaluator):
                     self.prior_z_vocabs = [CorpusVocab() for _ in range(len(prior_vec))]
                     self.posterior_z_vocabs = [CorpusVocab() for _ in range(len(prior_vec))]
                     self.joint_vocabs = [CorpusVocab() for _ in range(len(prior_vec))]
+                    self.z_vecs = [[] for _ in range(len(prior_vec))]
                 for n, (pr_el, po_el) in enumerate(zip(prior_vec, posterior_vec)):
                     self.prior_z_vocabs[n].add_element(pr_el)
                     self.posterior_z_vocabs[n].add_element(po_el)
+                    self.z_vecs[n].append(pr_el)
                 continue
             self.data_vocab.add_element(tk)
             for n, el in enumerate(ZInfoEvaluator._make_pair(tk, prior)):
                 self.joint_vocabs[n].add_element(el)
+
+        print('Z1 vs Z2', ZInfoEvaluator.compute_mi_two_vec(self.z_vecs[0], self.z_vecs[1]))
 
     def compute_mi(self):
         mi = [0 for _ in range(len(self.prior_z_vocabs))]
@@ -65,6 +72,27 @@ class ZInfoEvaluator(Evaluator):
                         - np.log(self.data_vocab.element_prob(tk))\
                         - np.log(self.prior_z_vocabs[n].element_prob(prior_entries[n]))
                 mi[n] += joint * el_mi
+        return mi
+
+    @staticmethod
+    def compute_mi_two_vec(vec1, vec2):
+        joint = Counter()
+        pr1 = Counter()
+        pr2 = Counter()
+
+        for el1, el2 in zip(vec1, vec2):
+            joint.update([(el1, el2)])
+            pr1.update([el1])
+            pr2.update([el2])
+        mi = 0
+        for el1, el2 in zip(vec1, vec2):
+            j_pr = joint[(el1, el2)] / sum(j_pr.values())
+            p1 = pr1[el1] / sum(pr1.values())
+            p2 = pr2[el2] / sum(pr2.values())
+            mi += j_pr * \
+                  (np.log(j_pr) -
+                   np.log(p1) -
+                   np.log(p2))
         return mi
 
     def compute_kl(self):
