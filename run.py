@@ -235,11 +235,11 @@ def run_evaluation(output_dir, model, dataset, device):
     if model.epoch_number > 0:
         wandb.log({'val_ppl': ppl})
         mis = z_evaluator.eval_from_dir(output_dir)
-        bleu = bleu_evaluator.eval_from_dir(output_dir)
+        bleu = bleu_evaluator.eval_from_dir(output_dir, role='system')
         for n, mi in enumerate(mis):
             wandb.log({f'z{n}_MI': mi})
         wandb.log({'z_MI_avg': np.mean(mis)})
-        wandb.log({'BLEU': bleu})
+        wandb.log({'response BLEU': bleu})
 
 
 if __name__ == '__main__':

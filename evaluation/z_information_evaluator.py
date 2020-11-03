@@ -1,6 +1,9 @@
 import os
 import numpy as np
 from collections import Counter
+from itertools import combinations
+import matplotlib.pyplot as plt
+import wandb
 
 from .commons import Evaluator, TurnRecord, CorpusVocab
 
@@ -54,7 +57,17 @@ class ZInfoEvaluator(Evaluator):
             for n, el in enumerate(ZInfoEvaluator._make_pair(tk, prior)):
                 self.joint_vocabs[n].add_element(el)
 
-        print('Z1 vs Z2', ZInfoEvaluator.compute_mi_two_vec(self.z_vecs[0], self.z_vecs[1]))
+        heatmap_m = np.eye(len(prior_vec), len(prior_vec)) * 100
+        for z, zz in combinations(range(len(prior_vec)), 2):
+            mi = ZInfoEvaluator.compute_mi_two_vec(self.z_vecs[z], self.z_vecs[zz])
+            heatmap_m[z, zz] = mi
+            heatmap_m[zz, z] = mi
+        fig = plt.figure(dpi=500,figsize=(10, 10))
+        img = plt.imshow(heatmap_m, cmap='hot')
+        #img = fig.figimage(heatmap_m, cmap='hot')
+        plt.colorbar(img)
+        wandb.log({'Z_MI': plt})
+
 
     def compute_mi(self):
         mi = [0 for _ in range(len(self.prior_z_vocabs))]
@@ -86,7 +99,7 @@ class ZInfoEvaluator(Evaluator):
             pr2.update([el2])
         mi = 0
         for el1, el2 in zip(vec1, vec2):
-            j_pr = joint[(el1, el2)] / sum(j_pr.values())
+            j_pr = joint[(el1, el2)] / sum(joint.values())
             p1 = pr1[el1] / sum(pr1.values())
             p2 = pr2[el2] / sum(pr2.values())
             mi += j_pr * \

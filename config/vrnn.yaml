@@ -12,17 +12,17 @@ embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 device_name: 'cuda:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
-drop_prob: 0.75
+drop_prob: 0.3
 lr_decay_rate: 0.98
 init_gumbel_softmax_tmp: 2.0
 gumbel_softmax_tmp: 2.0
-teacher_forcing_prob: 0.5
-z_teacher_forcing_prob: 0.5
+teacher_forcing_prob: 0.3
+z_teacher_forcing_prob: 0.3
 kl_to_ce: 1
 user_number_z_vectors: 1
-system_number_z_vectors: 1
+system_number_z_vectors: 5
 begin_kl_opt_epoch: 1
-stop_opt_z: 50
+stop_opt_z: 20
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
@@ -31,7 +31,7 @@ use_attention: true
 with_bpr: false
 with_bow_loss: false
 fake_prior: false
-min_epochs: 80
+min_epochs: 40
 max_epochs: 100
 db_cutoff: 3
 copy_start_epoch: 10

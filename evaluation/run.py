@@ -12,7 +12,7 @@ def main(args):
     metrics = args.metrics.lower()
     fn = args.fn if args.fn is not None else 'output_all.txt'
     if 'bleu' in metrics:
-        evaluators.append(BleuEvaluator())
+        evaluators.append(BleuEvaluator(fn))
     if 'z_semantics' in metrics:
         evaluators.append(ZSemanticEvaluator(fn))
     if 'z_info' in metrics:
