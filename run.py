@@ -69,7 +69,7 @@ def main(flags, config, config_path):
     if config['domain'] == 'camrest':
         reader = CamRestReader()
     elif config['domain'] == 'woz-hotel':
-        reader = MultiWOZReader(['hotel'])
+        reader = MultiWOZReader(['hotel'], max_allowed_len=config['max_allowed_turn_len'])
     elif config['domain'] == 'smd':
         reader = SMDReader()
     for data_set in sets:

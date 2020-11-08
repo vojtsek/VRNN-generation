@@ -244,14 +244,16 @@ class CamRestReader:
 
 class MultiWOZReader:
     
-    def __init__(self, allowed_domains):
+    def __init__(self, allowed_domains, max_allowed_len):
         self.allowed_domains = allowed_domains
+        self.max_allowed_len = max_allowed_len
 
     def parse_dialogues(self, data, delexicalizer=None):
         for dial in data:
             dialogue = Dialogue()
             turns = dial['log']
             i = 0
+            max_turn_len = 0
             for t in turns:
                 i += 1
 
@@ -267,9 +269,11 @@ class MultiWOZReader:
 
                     turn.add_usr_slu(slu)
                     turn.add_user(text)
+                    max_turn_len = max(max_turn_len, len(text.split()))
                 else:
                     turn.add_system(text)
                     turn.add_sys_slu([])
+                    max_turn_len = max(max_turn_len, len(text.split()))
                     dialogue.add_turn(turn)
                     continue
 
@@ -287,7 +291,8 @@ class MultiWOZReader:
                 # else:
                 #     turn.add_intent(None)
 
-            yield dialogue
+            if max_turn_len < self.max_allowed_len:
+                yield dialogue
 
     def parse_slu(self, slu):
         usr_slu = []

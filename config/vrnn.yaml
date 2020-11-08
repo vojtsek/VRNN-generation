@@ -9,6 +9,7 @@ domain: 'camrest'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
+max_allowed_turn_len: 25
 device_name: 'cuda:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4

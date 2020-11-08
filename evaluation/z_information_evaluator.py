@@ -74,11 +74,10 @@ class ZInfoEvaluator(Evaluator):
             #mi = ZInfoEvaluator.compute_mi_two_vec(self.z_vecs[z], self.z_vecs[zz])
             heatmap_m[z, zz] = mi
             heatmap_m[zz, z] = mi
-        fig = plt.figure(dpi=500, figsize=(10, 10))
+        fig = plt.figure(dpi=200, figsize=(10, 10))
         img = plt.imshow(heatmap_m, cmap='hot')
-        #img = fig.figimage(heatmap_m, cmap='hot')
         plt.colorbar(img)
-        # wandb.log({'Z_MI': plt})
+        wandb.log({'Z_MI': plt})
         # wandb.log({'Z_MI': heatmap_m})
         plt.clf()
         plt.close()
