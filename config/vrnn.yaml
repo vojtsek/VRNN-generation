@@ -1,15 +1,16 @@
 # data settings
 data_type: 'raw'
-data_dir: 'VRNN-generation/data/camrest'
-domain: 'camrest'
+#data_dir: 'VRNN-generation/data/camrest'
+#domain: 'camrest'
 #data_dir: 'VRNN-generation/data/smd'
 #domain: 'smd'
-#data_dir: 'VRNN-generation/data/multiwoz'
-#domain: 'woz-hotel'
+data_dir: 'VRNN-generation/data/multiwoz'
+domain: 'woz-hotel'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 25
+delex: true
 device_name: 'cuda:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
@@ -27,17 +28,17 @@ stop_opt_z: 20
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
-#use_copynet: true
-#use_attention: true
-use_copynet: false
-use_attention: false
+use_copynet: true
+use_attention: true
+#use_copynet: false
+#use_attention: false
 with_bpr: false
 with_bow_loss: false
 fake_prior: false
 min_epochs: 40
 max_epochs: 100
 db_cutoff: 3
-copy_start_epoch: 10
+copy_start_epoch: 5
 # KL before start increasing
 init_KL_term: 0.001
 # bow loss setting
