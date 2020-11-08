@@ -37,7 +37,7 @@ class TurnRecord:
             relative_line = 1
             current_nlu_line = ''
             for line in in_fd:
-                if '--' in line:
+                if '---' in line:
                     records.append(TurnRecord(current_turn_number,
                                               '-'.join(current_turn_type),
                                               prior_z_vector,
@@ -104,6 +104,8 @@ class TurnRecord:
     @staticmethod
     def _tk_generator(records):
         for r in records:
+            if r.prior_z_vector is None:
+                continue
             prior_z_str = ' '.join([str(tk) for tk in list(zip(*r.prior_z_vector))[1]])
             posterior_z_str = ' '.join([str(tk) for tk in list(zip(*r.posterior_z_vector))[1]])
             utt_tk = tokenize(r.gt_utterance)

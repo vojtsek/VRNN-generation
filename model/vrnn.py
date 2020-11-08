@@ -101,9 +101,9 @@ class VRNN(pl.LightningModule):
         copy_coeff = 0
         if self.epoch_number >= self.config['copy_start_epoch'] and \
             self.config['use_copynet']:
-            copy_coeff = exponential_delta(initial=1e-5,
+            copy_coeff = exponential_delta(initial=1e-2,
                                            final=1,
-                                           total_steps=self.config['min_epochs'],
+                                           total_steps=self.config['min_epochs'] - self.config['copy_start_epoch'],
                                            current_step=max(self.epoch_number - self.config['copy_start_epoch'], 0))
             copy_coeff = torch.from_numpy(np.array(copy_coeff))
         wandb.log({'copy_coeff': copy_coeff})

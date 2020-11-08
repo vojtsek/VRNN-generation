@@ -17,7 +17,6 @@ class BleuEvaluator(Evaluator):
 
         hyp = []
         ref = []
-        print([r.gt_utterance for r in self.records])
         for record in self.records:
             hyp.append(record.hyp_utterance)
             ref.append(record.gt_utterance)

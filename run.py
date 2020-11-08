@@ -59,7 +59,10 @@ def main(flags, config, config_path):
             val = getattr(flags, fl)
             if val is not None:
                 config[fl] = _parse_from_arg(val)
-    delexicalizer = Delexicalizer(config['data_dir'])
+    if config['delex']:
+        delexicalizer = Delexicalizer(config['data_dir'])
+    else:
+        delexicalizer = None
     print(config['batch_size'])
     sets = ['test', 'train', 'valid']
     readers = {}
@@ -96,7 +99,8 @@ def main(flags, config, config_path):
                             out_fn=config['embedding_out_fn'],
                             extern_vocab=[w for w, _ in (readers['train'].all_words.most_common(5000) +
                                                          readers['valid'].all_words.most_common(5000))])
-    embeddings.add_tokens_rnd(delexicalizer.all_tags)
+    if delexicalizer is not None:
+        embeddings.add_tokens_rnd(delexicalizer.all_tags)
     config['device'] = torch.device(config['device_name'])
     composed_transforms = TorchCompose([WordToInt(embeddings, config['db_cutoff']),
                                         Padding(embeddings.w2id[Embeddings.PAD],
@@ -228,17 +232,18 @@ def run_evaluation(output_dir, model, dataset, device):
 
 
         ppl = np.exp(- total_xent / examples_total)
-        pickle.dump(raw_scores, scores_fd)
+        # pickle.dump(raw_scores, scores_fd)
         pickle.dump(model.embeddings.id2w, inv_vocab_fd)
         pickle.dump(model.embeddings.w2id, vocab_fd)
         model.set_force(False)
     if model.epoch_number > 0:
         wandb.log({'val_ppl': ppl})
-        mis = z_evaluator.eval_from_dir(output_dir)
+        mis, mis_sum = z_evaluator.eval_from_dir(output_dir)
         bleu = bleu_evaluator.eval_from_dir(output_dir, role='system')
         for n, mi in enumerate(mis):
             wandb.log({f'z{n}_MI': mi})
         wandb.log({'z_MI_avg': np.mean(mis)})
+        wandb.log({'z_MI_sum': float(mis_sum)})
         wandb.log({'response BLEU': bleu})
 
 

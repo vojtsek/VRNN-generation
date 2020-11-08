@@ -12,38 +12,6 @@ from sklearn.feature_selection import mutual_info_classif
 
 from .commons import Evaluator, TurnRecord, CorpusVocab
 
-EPS=1e-15
-def mutual_information_2d(x, y, sigma=1, normalized=False):
-    bins = (256, 256)
-
-    x = np.array([int(xx) for xx in x])
-    y = np.array([int(xx) for xx in y])
-    jh = np.histogram2d(x, y, bins=bins)[0]
-
-    # smooth the jh with a gaussian filter of given sigma
-    ndimage.gaussian_filter(jh, sigma=sigma, mode='constant',
-                                 output=jh)
-
-    # compute marginal histograms
-    jh = jh + EPS
-    sh = np.sum(jh)
-    jh = jh / sh
-    s1 = np.sum(jh, axis=0).reshape((-1, jh.shape[0]))
-    s2 = np.sum(jh, axis=1).reshape((jh.shape[1], -1))
-
-    # Normalised Mutual Information of:
-    # Studholme,  jhill & jhawkes (1998).
-    # "A normalized entropy measure of 3-D medical image alignment".
-    # in Proc. Medical Imaging 1998, vol. 3338, San Diego, CA, pp. 132-143.
-    if normalized:
-        mi = ((np.sum(s1 * np.log(s1)) + np.sum(s2 * np.log(s2)))
-                / np.sum(jh * np.log(jh))) - 1
-    else:
-        mi = ( np.sum(jh * np.log(jh)) - np.sum(s1 * np.log(s1))
-               - np.sum(s2 * np.log(s2)))
-
-    return mi
-
 
 class ZInfoEvaluator(Evaluator):
     def __init__(self, fn):
@@ -59,12 +27,16 @@ class ZInfoEvaluator(Evaluator):
         fn = os.path.join(directory, self.fn)
         slot_map = dict()
         TurnRecord.parse(fn, self.records, slot_map, role)
-        self._fill_vocabs()
-        mutual_information = self.compute_mi()
+        zz_mi_matrix = self._fill_vocabs()
+        zz_mi = 0
+        for i in range(zz_mi_matrix.shape[0]):
+            for j in range(i):
+                zz_mi += zz_mi_matrix[i][j]
+        mutual_informations = self.compute_mi()
         #kl_qz = self.compute_kl()
         kl_qz = 0
-        print(f'MI: {mutual_information}\nKL: {kl_qz}')
-        return mutual_information
+        print(f'MI: {mutual_informations}\nKL: {kl_qz}')
+        return mutual_informations, np.sum(mutual_informations) - zz_mi
 
     @staticmethod
     def _make_pair(tk, z_str):
@@ -106,9 +78,11 @@ class ZInfoEvaluator(Evaluator):
         img = plt.imshow(heatmap_m, cmap='hot')
         #img = fig.figimage(heatmap_m, cmap='hot')
         plt.colorbar(img)
-        wandb.log({'Z_MI': plt})
+        # wandb.log({'Z_MI': plt})
+        # wandb.log({'Z_MI': heatmap_m})
         plt.clf()
         plt.close()
+        return heatmap_m
 
 
     def compute_mi(self):
