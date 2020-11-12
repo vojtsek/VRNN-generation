@@ -23,8 +23,8 @@ class Delexicalizer:
         otgy = json.load(fd)
         new_otgy = dict()
         for ent in otgy:
-            new_ent = ent.replace(' ', '-')
-            new_otgy[new_ent] = [str(val) for val in otgy[ent]]
+            new_ent = ent.replace(' ', '_')
+            new_otgy[new_ent] = [str(val) for val in otgy[ent] if len(val) > 3]
         return new_otgy
 
     def delex_utterance(self, utt):
@@ -58,6 +58,7 @@ class Delexicalizer:
         return utt
 
     def _make_tag(self, s):
+        s = s.split('-')[-1]
         tag = f'<{s.lower()}>'
         self.all_tags.add(tag)
         return tag

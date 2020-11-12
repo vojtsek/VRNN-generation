@@ -109,6 +109,7 @@ def main(flags, config, config_path):
                                                 max(readers['train'].max_slu_len, readers['valid'].max_slu_len) + 2),
                                         # +2 for <BOS>,<EOS>
                                         ToTensor(config['device'])])
+    print('DATA_LEN', len(readers['train'].dialogues))
     train_dataset = Dataset(readers['train'].dialogues, transform=composed_transforms)
     valid_dataset = Dataset(readers['valid'].dialogues, transform=composed_transforms)
     test_dataset = Dataset(readers['test'].dialogues, transform=composed_transforms)
@@ -129,7 +130,7 @@ def main(flags, config, config_path):
     wandb.config.update(config)
     if flags.train_more or flags.model_path is None:
         config['retraining'] = flags.train_more
-        callbacks = [EpochEndCb(), EvaluationCb(output_dir, valid_dataset)]
+        callbacks = [EpochEndCb(), EvaluationCb(output_dir, [valid_dataset, test_dataset])]
         logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')
         trainer = pl.Trainer(
             min_epochs=config['min_epochs'],
@@ -142,28 +143,27 @@ def main(flags, config, config_path):
             progress_bar_refresh_rate=1,
             gpus=1 if 'cuda' in config['device_name'] else 0
         )
-        run_evaluation(output_dir, model, valid_dataset, config['device'])
+        run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid')
         trainer.fit(model)
-        run_evaluation(output_dir, model, valid_dataset, config['device'])
+        run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid')
 
 
 class EvaluationCb(pl.Callback):
-    def __init__(self, output_dir, dataset):
+    def __init__(self, output_dir, datasets):
         self.output_dir = output_dir
-        self.dataset = dataset
+        self.datasets = datasets
 
     def on_epoch_end(self, trainer, model):
-        run_evaluation(self.output_dir, model, self.dataset, model.config['device'])
+        run_evaluation(self.output_dir, model, self.datasets[0], model.config['device'], 'valid')
+        run_evaluation(self.output_dir, model, self.datasets[1], model.config['device'], 'test')
         model.train()
 
 
-def run_evaluation(output_dir, model, dataset, device):
+def run_evaluation(output_dir, model, dataset, device, dataset_name):
     model.eval()
-    z_evaluator = ZInfoEvaluator(f'output_all_{model.epoch_number}.txt')
-    bleu_evaluator = BleuEvaluator(f'output_all_{model.epoch_number}.txt')
     model = model.to(device)
     loader = TorchDataLoader(dataset, batch_size=1, shuffle=True)
-    with open(os.path.join(output_dir, f'output_all_{model.epoch_number}.txt'), 'wt') as all_fd, \
+    with open(os.path.join(output_dir, f'output_all_{model.epoch_number}_{dataset_name}.txt'), 'wt') as all_fd, \
             open(os.path.join(output_dir, 'system_out.txt'), 'wt') as system_fd, \
             open(os.path.join(output_dir, 'system_ground_truth.txt'), 'wt') as system_gt_fd, \
             open(os.path.join(output_dir, 'user_out.txt'), 'wt') as user_fd, \
@@ -237,6 +237,8 @@ def run_evaluation(output_dir, model, dataset, device):
         pickle.dump(model.embeddings.w2id, vocab_fd)
         model.set_force(False)
     if model.epoch_number > 0:
+        z_evaluator = ZInfoEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
+        bleu_evaluator = BleuEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
         wandb.log({'val_ppl': ppl})
         mis, mis_sum = z_evaluator.eval_from_dir(output_dir)
         bleu = bleu_evaluator.eval_from_dir(output_dir, role='system')

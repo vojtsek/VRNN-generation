@@ -261,7 +261,7 @@ class MultiWOZReader:
                 if len(text) < 1:
                     continue
                 if i % 2 == 1:
-                    turn = Turn()
+                    turn = Turn(delexicalizer)
                     if 'dialog_act' in t:
                         slu = self.parse_slu(t['dialog_act'])
                     else:

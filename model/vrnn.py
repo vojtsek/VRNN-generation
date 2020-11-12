@@ -300,6 +300,7 @@ class VRNN(pl.LightningModule):
 
         decoder_losses = [total_system_decoder_loss, total_user_decoder_loss,
                         total_usr_nlu_decoder_loss, total_sys_nlu_decoder_loss]
+        decoder_losses = [total_system_decoder_loss, total_user_decoder_loss]
         decoder_loss = torch.mean(torch.stack(decoder_losses))
         batch_sort_perm = torch.LongTensor(list(reversed(np.argsort(dial_lens.cpu().numpy())))).to(self.config['device'])
         dial_lens = dial_lens[batch_sort_perm]
