@@ -9,9 +9,10 @@ torch.manual_seed(0)
 
 class ZNet(torch.nn.Module):
 
-    def __init__(self, config, z_type, z_logits_dim, cond_z_logits_dim, fake_prior):
+    def __init__(self, config, z_type, z_logits_dim, cond_z_logits_dim, fake_prior, fake):
         super(ZNet, self).__init__()
         self.config = config
+        self.fake = fake
         self.z_logits_dim = z_logits_dim
         self.z_type = z_type
         self.fake_prior = fake_prior
@@ -80,6 +81,8 @@ class ZNet(torch.nn.Module):
                                   device=self.config['device'])
         # z_posterior_projection = self.posterior_net2(q_z_samples)
 
+        if self.fake:
+            q_z_samples = mu
         if self.z_type == 'cont':
             q_z = q_z_samples
             p_z = q_z_samples

@@ -31,13 +31,15 @@ class VAECell(torch.nn.Module):
         self.user_z_nets = torch.nn.ModuleList([ZNet(config, config['user_z_type'],
                                                      config['user_z_logits_dim'],
                                                      config['user_z_total_size'],
-                                                     fake_prior=True)
+                                                     fake_prior=True,
+                                                     fake=True)
                                                 for _ in range(config['user_number_z_vectors'])])
         self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type'],
                                                        config['system_z_logits_dim'],
                                                        config['system_z_total_size'] +
                                                        self.encoder_hidden_size,
-                                                       fake_prior=self.config['fake_prior'])
+                                                       fake_prior=self.config['fake_prior'],
+                                                       fake=False)
                                                   for _ in range(config['system_number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
                                    config['user_z_total_size'] +
@@ -113,7 +115,7 @@ class VAECell(torch.nn.Module):
     def _z_module(self, dials, lens, encoder_init_state, previous_vrnn_hidden,
                   z_nets, decoders, z_previous, use_prior, db_res=None,
                   copy_dials_idx=None, copy_encoder_hiddens=None, prev_output=None,
-                  copy_coeff=0):
+                  copy_coeff=0, fake=False):
         # lens[0]: actual turns, lens[1:] possible further supervision; decoder corresponding list
         dials_idx = dials
         if db_res is not None:
@@ -208,7 +210,8 @@ class VAECell(torch.nn.Module):
                                                           [self.user_dec, self.usr_nlu_dec],
                                                           user_z_previous,
                                                           copy_coeff=copy_coeff,
-                                                          use_prior=False)
+                                                          use_prior=False,
+                                                          fake=True)
 
         system_turn_output, _ = self._z_module(system_dials,
                                                [system_lens, sys_nlu_lens],
