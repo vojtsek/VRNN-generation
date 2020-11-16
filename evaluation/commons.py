@@ -11,13 +11,17 @@ class TurnRecord:
                  prior_z_vec,
                  posterior_z_vec,
                  hyp_utterance,
-                 gt_utterance):
+                 gt_utterance,
+                 sys_nlu):
         self.turn_number = turn_number
         self.turn_type = turn_type
         self.prior_z_vector = prior_z_vec
         self.posterior_z_vector = posterior_z_vec
         self.hyp_utterance = hyp_utterance
         self.gt_utterance = gt_utterance
+        self.sys_nlu = sys_nlu
+        sys_nlu = [action for action in sys_nlu if 'booking' not in action.lower()]
+        self.turn_type = sys_nlu[0] if len(sys_nlu) > 0 else 'unk'
 
     def __str__(self):
         return f'Turn {self.turn_number}, prior {self.prior_z_vector}, posterior {self.posterior_z_vector}'
@@ -43,7 +47,8 @@ class TurnRecord:
                                               prior_z_vector,
                                               posterior_z_vector,
                                               hyp_utterance,
-                                              gt_utterance))
+                                              gt_utterance,
+                                              sys_nlu))
                     current_turn_number = None
                     current_turn_type = []
                     prior_z_vector = None
@@ -82,6 +87,8 @@ class TurnRecord:
                         hyp_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
                     if 'SYS GT' in line:
                         gt_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
+                    if 'SYS NLU' in line:
+                        sys_nlu = strip_utterance_special_tokens(':'.join(line.split(':')[1:])).split()
                 else:
                     if 'Turn' in line:
                         relative_line = 0

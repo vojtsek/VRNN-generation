@@ -101,6 +101,8 @@ def main(flags, config, config_path):
                                                          readers['valid'].all_words.most_common(5000))])
     if delexicalizer is not None:
         embeddings.add_tokens_rnd(delexicalizer.all_tags)
+    for dataset in sets:
+        embeddings.add_tokens_rnd(readers[data_set].all_actions)
     config['device'] = torch.device(config['device_name'])
     composed_transforms = TorchCompose([WordToInt(embeddings, config['db_cutoff']),
                                         Padding(embeddings.w2id[Embeddings.PAD],
@@ -205,7 +207,7 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name):
                 print(f'\tUSER GT{" ".join(predictions.all_user_gt[i])}', file=all_fd)
                 print(f'\t{" ".join(predictions.all_usr_nlu_gt[i])}', file=all_fd)
                 print(f'\tSYS GT:{" ".join(predictions.all_system_gt[i])}', file=all_fd)
-                print(f'\t{" ".join(predictions.all_sys_nlu_gt[i])}', file=all_fd)
+                print(f'\tSYS NLU:{" ".join(predictions.all_sys_nlu_gt[i])}', file=all_fd)
                 print(f'\tprior Z: {" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]])}', file=all_fd)
                 print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
                 print(f'\tuser Z: {" ".join([str(z) for z in predictions.all_user_z_samples_matrix[i][0]])}', file=all_fd)

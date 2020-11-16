@@ -34,6 +34,7 @@ class DataReader:
         self.max_dial_len = 0
         self.max_turn_len = 0
         self.max_slu_len = 0
+        self.all_actions = set()
         if db_file is not None and os.path.exists(db_file):
             self.db = JSONDb(db_file)
         else:
@@ -76,6 +77,7 @@ class DataReader:
                 self.all_words.update(t.user)
                 self.all_words.update(t.system)
                 self.all_words.update([s.val for s in t.usr_slu])
+                self.all_actions.update(set(t.system_nlu))
 
                 if self.db is not None:
                     for s in t.usr_slu:
@@ -181,7 +183,7 @@ class Turn:
         self.state = self._process_slu(state)
 
     def add_sys_slu(self, sys_slu):
-        self.sys_slu = sys_slu
+        self.system_nlu = sys_slu
 
     def add_intent(self, intent):
         self.intent = intent
@@ -272,7 +274,10 @@ class MultiWOZReader:
                     max_turn_len = max(max_turn_len, len(text.split()))
                 else:
                     turn.add_system(text)
-                    turn.add_sys_slu([])
+                    if 'sys_action' in t:
+                        turn.add_sys_slu(t['sys_action'].split(','))
+                    else:
+                        turn.add_sys_slu([])
                     max_turn_len = max(max_turn_len, len(text.split()))
                     dialogue.add_turn(turn)
                     continue

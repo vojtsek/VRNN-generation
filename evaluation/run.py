@@ -14,7 +14,7 @@ def main(args):
     if 'bleu' in metrics:
         evaluators.append(BleuEvaluator(fn))
     if 'z_semantics' in metrics:
-        evaluators.append(ZSemanticEvaluator(fn))
+        evaluators.append(ZSemanticEvaluator(fn, args.test_fn))
     if 'z_info' in metrics:
         evaluators.append(ZInfoEvaluator(fn))
     if 'ppl' in metrics:
@@ -29,5 +29,6 @@ if __name__ == '__main__':
     parser.add_argument('--metrics', type=str, default='bleu')
     parser.add_argument('--work_dir', required=True, type=str)
     parser.add_argument('--fn', required=False, type=str, default=None)
+    parser.add_argument('--test_fn', required=False, type=str)
     args = parser.parse_args()
     main(args)

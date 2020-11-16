@@ -16,6 +16,12 @@ class ZSemanticEvaluator(Evaluator):
         self.fn = fn
         self.fn_test = fn_test
 
+    def _label(self, tpe):
+        tpe = tpe.split('-')[0]
+        if tpe.startswith('general'):
+            tpe = 'goodbye'
+        return tpe
+
     def eval_from_dir(self, directory, role=None):
         fn = os.path.join(directory, self.fn)
         records = []
@@ -38,6 +44,9 @@ class ZSemanticEvaluator(Evaluator):
             records = sorted(records, key=lambda r: r.turn_type)
             for cls, (t_tpe, records) in enumerate(groupby(records, key=lambda r: r.turn_type)):
                 r = copy.deepcopy(records)
+                t_tpe = self._label(t_tpe)
+                if t_tpe == 'unk':
+                    continue
                 print(t_tpe, len(list(r)))
                 classes.append(t_tpe)
                 t_counter = Counter()
@@ -53,22 +62,29 @@ class ZSemanticEvaluator(Evaluator):
             rf_clf.fit(X, y)
             X_test, y_test = [], []
             test_records = sorted(test_records, key=lambda r: r.turn_type)
+            classes = sorted(list(set(classes)))
             for cls, (t_tpe, records) in enumerate(groupby(test_records, key=lambda r: r.turn_type)):
                 r = copy.deepcopy(records)
+                if t_tpe == 'unk':
+                    continue
                 for record in records:
                     d = []
                     for i in record.prior_z_vector:
                         d.extend(_oh(i[1], 20))
                     X_test.append(d)
+                    t_tpe = self._label(t_tpe)
                     y_test.append(t_tpe)
 
-            y_hat = dt_clf.predict(X)
             y_hat_rf = rf_clf.predict(X)
+            y_hat = dt_clf.predict(X)
             acc = accuracy_score(y, y_hat)
+            y_hat = dt_clf.predict(X_test)
+            acc_test = accuracy_score(y_test, y_hat)
 
-            print('DT accuracy:', acc)
+            print('DT accuracy:', acc, acc_test)
             fig = plt.gcf()
-            fig.set_size_inches(15, 9)
+            fig.set_size_inches(30, 18)
+            fig.set_dpi(200)
             tree.plot_tree(dt_clf,
                            filled=True,
                            label='none',
