@@ -18,8 +18,8 @@ class ZSemanticEvaluator(Evaluator):
 
     def _label(self, tpe):
         tpe = tpe.split('-')[0]
-        if tpe.startswith('general'):
-            tpe = 'goodbye'
+ #       if tpe.startswith('general'):
+#            tpe = 'goodbye'
         return tpe
 
     def eval_from_dir(self, directory, role=None):
@@ -36,16 +36,17 @@ class ZSemanticEvaluator(Evaluator):
                 oh[idx] = 1
                 return oh
 
-            dt_clf = tree.DecisionTreeClassifier(max_depth=7, criterion='gini')
+            dt_clf = tree.DecisionTreeClassifier(max_depth=4, criterion='gini')
             rf_clf = RandomForestClassifier()
             X = []
             y = []
             classes = []
+            all_y_classes = Counter()
             records = sorted(records, key=lambda r: r.turn_type)
             for cls, (t_tpe, records) in enumerate(groupby(records, key=lambda r: r.turn_type)):
                 r = copy.deepcopy(records)
                 t_tpe = self._label(t_tpe)
-                if t_tpe == 'unk':
+                if t_tpe in  ['unk', '']:
                     continue
                 print(t_tpe, len(list(r)))
                 classes.append(t_tpe)
@@ -56,11 +57,13 @@ class ZSemanticEvaluator(Evaluator):
                         d.extend(_oh(i[1], 20))
                     X.append(d)
                     y.append(t_tpe)
+                    all_y_classes.update([t_tpe])
                     t_counter.update([str(i) for i in record.prior_z_vector])
                 print(t_counter.most_common(5))
             dt_clf.fit(X, y)
             rf_clf.fit(X, y)
             X_test, y_test = [], []
+            most_common = all_y_classes.most_common(1)[0][0]
             test_records = sorted(test_records, key=lambda r: r.turn_type)
             classes = sorted(list(set(classes)))
             for cls, (t_tpe, records) in enumerate(groupby(test_records, key=lambda r: r.turn_type)):
@@ -82,6 +85,7 @@ class ZSemanticEvaluator(Evaluator):
             acc_test = accuracy_score(y_test, y_hat)
 
             print('DT accuracy:', acc, acc_test)
+            print('majority:', accuracy_score(y_test, [most_common] * len(y_test)))
             fig = plt.gcf()
             fig.set_size_inches(30, 18)
             fig.set_dpi(200)

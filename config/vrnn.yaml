@@ -1,17 +1,17 @@
 # data settings
 data_type: 'raw'
-#data_dir: 'VRNN-generation/data/camrest'
-#domain: 'camrest'
+data_dir: 'VRNN-generation/data/camrest'
+domain: 'camrest'
 #data_dir: 'VRNN-generation/data/smd'
 #domain: 'smd'
-data_dir: 'VRNN-generation/data/multiwoz'
-domain: 'woz-hotel'
+#data_dir: 'VRNN-generation/data/multiwoz'
+#domain: 'woz-hotel'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 20
 delex: true
-device_name: 'cuda:0' # cpu|cuda
+device_name: 'cpu:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
 drop_prob: 0.3
@@ -22,7 +22,7 @@ teacher_forcing_prob: 0.3
 z_teacher_forcing_prob: 0.3
 kl_to_ce: 1
 user_number_z_vectors: 1
-system_number_z_vectors: 1
+system_number_z_vectors: 8
 begin_kl_opt_epoch: 1
 stop_opt_z: 20
 prior_module_recurrent: false
@@ -48,7 +48,7 @@ default_lambda_loss: 1.0
 # layer sizes
 input_encoder_hidden_size: 250
 user_decoder_hidden_size: 100
-system_decoder_hidden_size: 250
+system_decoder_hidden_size: 350
 vrnn_hidden_size: 100
 posterior_ff_sizes1:
   - 200
@@ -65,4 +65,4 @@ bow_layer_size: 400
 user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
 user_z_logits_dim: 200
-system_z_logits_dim: 20
+system_z_logits_dim: 10
