@@ -23,7 +23,7 @@ class ZInfoEvaluator(Evaluator):
         self.posterior_z_vocabs = None
         self.z_vecs = []
 
-    def eval_from_dir(self, directory, role='system'):
+    def eval_from_dir(self, directory, role='user'):
         fn = os.path.join(directory, self.fn)
         slot_map = dict()
         TurnRecord.parse(fn, self.records, slot_map, role)

@@ -47,22 +47,21 @@ alpha_coeff_step: 0.5
 default_lambda_loss: 1.0
 # layer sizes
 input_encoder_hidden_size: 250
-user_decoder_hidden_size: 100
+user_decoder_hidden_size: 200
 system_decoder_hidden_size: 350
 vrnn_hidden_size: 100
 posterior_ff_sizes1:
-  - 200
+  - 100
 #  - 200
 posterior_ff_sizes2:
 #  - 200
-  - 200
+  - 100
 prior_lstm_size: 150
 prior_ff_sizes:
-  - 120
-  - 50
+  - 100
 bow_layer_size: 400
 # latent z config
 user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
-user_z_logits_dim: 200
+user_z_logits_dim: 150
 system_z_logits_dim: 10

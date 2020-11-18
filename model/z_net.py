@@ -35,14 +35,14 @@ class ZNet(torch.nn.Module):
         # self.prior_net = FFNet(z_logits_dim + config['vrnn_hidden_size'],
         if self.config['prior_module_recurrent']:
             self.prior_net = torch.nn.LSTMCell(cond_z_logits_dim, self.config['prior_lstm_size'])
-            self.prior_projection = torch.nn.Linear(self.config['prior_lstm_size'], z_logits_dim)
+            self.prior_projection = torch.nn.Linear(self.config['prior_lstm_size'], z_logits_dim * 2)
             self._reset_hidden()
         else:
             self.prior_net = FFNet(cond_z_logits_dim,
                                    config['prior_ff_sizes'],
                                    activations=[torch.tanh],
                                    drop_prob=config['drop_prob'])
-            self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim)
+            self.prior_projection = torch.nn.Linear(config['prior_ff_sizes'][-1], z_logits_dim * 2)
 
     def forward(self, x, z_previous, vrnn_hidden):
         # x = self.posterior_net1(x)
@@ -69,24 +69,26 @@ class ZNet(torch.nn.Module):
                                       self.config['gumbel_softmax_tmp'],
                                       hard=self.config['gumbel_hard'],
                                       device=self.config['device'])
+            p_z_samples =\
+                gumbel_softmax_sample(z_prior_logits,
+                                      self.config['gumbel_softmax_tmp'],
+                                      hard=self.config['gumbel_hard'],
+                                      device=self.config['device'])
         else:
             mu = z_posterior_logits[:, :self.z_logits_dim]
             logvar = z_posterior_logits[:, self.z_logits_dim:]
             q_z = z_posterior_logits
             q_z_samples = normal_sample(mu, logvar, device=self.config['device'])
-        p_z_samples =\
-            gumbel_softmax_sample(z_prior_logits,
-                                  self.config['gumbel_softmax_tmp'],
-                                  hard=self.config['gumbel_hard'],
-                                  device=self.config['device'])
+            mu_prior = z_prior_logits[:, :self.z_logits_dim]
+            logvar_prior = z_prior_logits[:, self.z_logits_dim:]
+            p_z_samples = normal_sample(mu_prior, logvar_prior, device=self.config['device'])
         # z_posterior_projection = self.posterior_net2(q_z_samples)
 
         if self.fake:
             q_z_samples = mu
         if self.z_type == 'cont':
             q_z = q_z_samples
-            p_z = q_z_samples
-            p_z_samples = q_z_samples
+            p_z = p_z_samples
         # else:
             # logp = torch.log(p_z)
             # logq = torch.log(q_z)

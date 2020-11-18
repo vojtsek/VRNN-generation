@@ -21,7 +21,7 @@ def main(args):
         evaluators.append(PPLEvaluator(fn))
 
     for evaluator in evaluators:
-        evaluator.eval_from_dir(args.work_dir, 'system')
+        evaluator.eval_from_dir(args.work_dir, args.role)
 
 
 if __name__ == '__main__':
@@ -30,5 +30,6 @@ if __name__ == '__main__':
     parser.add_argument('--work_dir', required=True, type=str)
     parser.add_argument('--fn', required=False, type=str, default=None)
     parser.add_argument('--test_fn', required=False, type=str)
+    parser.add_argument('--role', required=False, type=str, default='system')
     args = parser.parse_args()
     main(args)

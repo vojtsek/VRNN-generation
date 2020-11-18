@@ -31,8 +31,8 @@ class VAECell(torch.nn.Module):
         self.user_z_nets = torch.nn.ModuleList([ZNet(config, config['user_z_type'],
                                                      config['user_z_logits_dim'],
                                                      config['user_z_total_size'],
-                                                     fake_prior=True,
-                                                     fake=True)
+                                                     fake_prior=False,
+                                                     fake=False)
                                                 for _ in range(config['user_number_z_vectors'])])
         self.system_z_nets = torch.nn.ModuleList([ZNet(config, config['system_z_type'],
                                                        config['system_z_logits_dim'],
