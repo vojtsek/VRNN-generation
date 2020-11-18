@@ -210,34 +210,34 @@ class VAECell(torch.nn.Module):
                                                           [self.user_dec, self.usr_nlu_dec],
                                                           user_z_previous,
                                                           copy_coeff=copy_coeff,
-                                                          use_prior=False,
-                                                          fake=True)
+                                                          use_prior=True,
+                                                          fake=False)
 
-        system_turn_output, _ = self._z_module(system_dials,
-                                               [system_lens, sys_nlu_lens],
-                                               encoder_init_state,
-                                               previous_vrnn_hidden,
-                                               self.system_z_nets,
-                                               [self.system_dec, self.sys_nlu_dec],
-                                               system_z_previous,
-                                               db_res=db_res,
-                                               use_prior=use_prior,
-                                               prev_output=user_turn_output,
-                                               copy_dials_idx=user_dials_idx,
-                                               copy_encoder_hiddens=user_turn_output.encoder_hiddens,
-                                               copy_coeff=copy_coeff
-                                               )
-
-        system_sampled_z = system_turn_output.sampled_z
+        user_sampled_z = user_turn_output.sampled_z
         encoded_inputs = user_turn_output.last_encoder_hidden
-        vrnn_input = torch.cat([system_sampled_z, encoded_inputs], dim=1)
+        vrnn_input = torch.cat([user_sampled_z, encoded_inputs], dim=1)
         next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
+#        system_turn_output, sys_dials_idx = self._z_module(system_dials,
+#                                                          [system_lens, sys_nlu_lens],
+#                                                          encoder_init_state,
+#                                                          next_vrnn_hidden,
+#                                                          self.user_z_nets,
+#                                                          [self.user_dec, self.usr_nlu_dec],
+#                                                          user_z_previous,
+#                                                          copy_coeff=copy_coeff,
+#                                                          use_prior=True,
+#                                                          fake=False)
+#
+#        system_sampled_z = system_turn_output.sampled_z
+#        encoded_inputs = system_turn_output.last_encoder_hidden
+#        vrnn_input = torch.cat([system_sampled_z, encoded_inputs], dim=1)
+#        next_vrnn_hidden = self.vrnn_cell(vrnn_input, next_vrnn_hidden)
 
         del encoder_init_state
         # torch.cuda.empty_cache()
         return VAECellOutput(next_vrnn_hidden=next_vrnn_hidden,
                              user_turn_output=user_turn_output,
-                             system_turn_output=system_turn_output)
+                             system_turn_output=user_turn_output)
 
     def aggregate(self, x):
         if x.shape[0] == 1:

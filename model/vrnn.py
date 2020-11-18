@@ -30,7 +30,7 @@ class VRNN(pl.LightningModule):
         # hidden is configured
         self.vrnn_cell = torch.nn.LSTMCell(
             # user input (possibly bidirectional) + system logits
-            config['system_z_total_size'] +
+            config['user_z_total_size'] +
             config['input_encoder_hidden_size'] * (1 + int(config['bidirectional_encoder'])),
             config['vrnn_hidden_size'])
         self.embeddings_matrix = torch.nn.Embedding(len(embeddings.w2id), embeddings.d).to(self.config['device'])
@@ -279,28 +279,10 @@ class VRNN(pl.LightningModule):
         total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
                                                                 step_output.user_dials,
                                                                 step_output.user_lens)
-        total_system_decoder_loss = self._compute_decoder_ce_loss(step_output.system_outputs,
-                                                                  step_output.system_dials,
-                                                                  step_output.system_lens, pr=True)
 
-        total_usr_nlu_decoder_loss = self._compute_decoder_ce_loss(step_output.usr_nlu_outputs,
-                                                               step_output.usr_nlu_dials,
-                                                               step_output.usr_nlu_lens)
+        total_bow_loss = 0
 
-        total_sys_nlu_decoder_loss = self._compute_decoder_ce_loss(step_output.sys_nlu_outputs,
-                                                               step_output.sys_nlu_dials,
-                                                               step_output.sys_nlu_lens)
-        if self.config['with_bow_loss']:
-            total_bow_loss = self._compute_bow_loss(step_output.bow_logits,
-                                                    step_output.user_outputs,
-                                                    step_output.user_dials,
-                                                    step_output.user_lens)
-        else:
-            total_bow_loss = 0
-
-        decoder_losses = [total_system_decoder_loss, total_user_decoder_loss,
-                        total_usr_nlu_decoder_loss, total_sys_nlu_decoder_loss]
-        decoder_losses = [total_system_decoder_loss, total_user_decoder_loss]
+        decoder_losses = [total_user_decoder_loss]
         decoder_loss = torch.mean(torch.stack(decoder_losses))
         batch_sort_perm = torch.LongTensor(list(reversed(np.argsort(dial_lens.cpu().numpy())))).to(self.config['device'])
         dial_lens = dial_lens[batch_sort_perm]
@@ -310,11 +292,6 @@ class VRNN(pl.LightningModule):
         else:
             # KL loss between q_z and p_z
             usr_kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
-        if self.config['system_z_type'] == 'cont':
-            system_kl_loss = self._compute_vae_kl_loss(step_output.system_q_zs, dial_lens)
-        else:
-            system_kl_loss =\
-                self._compute_discrete_vae_kl_loss(step_output.system_q_zs, step_output.system_p_zs, dial_lens)
 
         del step_output.system_q_zs, step_output.system_p_zs, step_output.user_q_zs, step_output.user_p_zs, batch_sort_perm
         lambda_i = min(self.lmbd, self.k + self.alpha * self.epoch_number)
@@ -326,26 +303,12 @@ class VRNN(pl.LightningModule):
                                           final=final_usr_kl_term,
                                           total_steps=self.config['min_epochs'],
                                           current_step=max(self.epoch_number - increase_start_epoch, 0))
-        lambda_sys_kl = exponential_delta(initial=self.config['init_KL_term'],
-                                          final=final_sys_kl_term,
-                                          total_steps=self.config['min_epochs'],
-                                          current_step=max(self.epoch_number - increase_start_epoch, 0))
-        if self.epoch_number < increase_start_epoch:
-            lambda_sys_kl = lambda_usr_kl = 0
 
-        # step = (final_kl_term - self.config['init_KL_term']) / min_epochs
-        # lambda_kl = self.config['init_KL_term'] +\
-        #             step * min(max(self.epoch_number - increase_start_epoch, 0), min_epochs)
-        system_kl_loss *= lambda_sys_kl
         usr_kl_loss *= lambda_usr_kl
-        kl_loss = (system_kl_loss + usr_kl_loss) / 2
-        if optimizer_idx == 0:
-            loss = decoder_loss + usr_kl_loss # + .1 * q_penalty
-        else:
-            loss = system_kl_loss + total_system_decoder_loss
+        loss = decoder_loss + usr_kl_loss # + .1 * q_penalty
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
     # # print(f'loss {loss}, usr_kl_loss {usr_kl_loss}, total_user_decoder_loss {total_user_decoder_loss}, system_kl_loss {system_kl_loss}, total_system_decoder_loss {total_system_decoder_loss}')
-        return loss, usr_kl_loss, total_user_decoder_loss, system_kl_loss, total_system_decoder_loss
+        return loss, usr_kl_loss, total_user_decoder_loss, usr_kl_loss, total_user_decoder_loss
 
     def training_step(self, train_batch, batch_idx, optimizer_idx=0):
         loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss =\
@@ -497,7 +460,7 @@ class VRNN(pl.LightningModule):
             opts.append(optimizer_prior)
             schedulers.append(self.lr_scheduler)
             #schedulers.append(torch.optim.lr_scheduler.ExponentialLR(optimizer=optimizer_prior, gamma=self.config['lr_decay_rate']))
-        return opts
+        return [optimizer_network]
 
     def optimizer_step(self, current_epoch, batch_nb, optimizer, optimizer_i, second_order_closure=None):
         if optimizer_i == 0 and not self.config['retraining'] and \

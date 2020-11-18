@@ -72,6 +72,7 @@ class DataReader:
                 continue
 
             self._dialogues.append(d)
+
             state = {}
             for t in d.turns:
                 self.all_words.update(t.user)
