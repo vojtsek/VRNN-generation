@@ -43,9 +43,9 @@ class TurnRecord:
             w=0
             for line in in_fd:
                 if '---' in line:
-                    w += 1
-                    if (w % 2 == 0):
-                        records.append(TurnRecord(current_turn_number,
+                    #w += 1
+                   # if (w % 2 == 1):
+                    records.append(TurnRecord(current_turn_number,
                                               '-'.join(current_turn_type),
                                               prior_z_vector,
                                               posterior_z_vector,

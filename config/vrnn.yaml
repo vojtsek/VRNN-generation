@@ -6,7 +6,7 @@ domain: 'camrest'
 #domain: 'smd'
 #data_dir: 'VRNN-generation/data/multiwoz'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
+embedding_fn: 'VRNN-generation/data/embeddings/fasttext-fake.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 20

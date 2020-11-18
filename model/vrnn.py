@@ -220,8 +220,11 @@ class VRNN(pl.LightningModule):
     def _step(self, batch, optimizer_idx=0):
         user_dials, user_lens, dial_lens = batch
         step_output = self.forward(*batch)
-        total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
-                                                                step_output.user_dials,
+        #ref_dials = torch.cat([step_output.user_dials[1:], step_output.user_dials[0].unsqueeze(0)])
+        ref_dials = step_output.user_dials[1:]
+        hyp_dials = step_output.user_outputs[:-1]
+        total_user_decoder_loss = self._compute_decoder_ce_loss(hyp_dials,
+                                                                ref_dials,
                                                                 step_output.user_lens)
 
         total_bow_loss = 0
