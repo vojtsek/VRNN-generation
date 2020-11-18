@@ -88,7 +88,7 @@ class DataReader:
                 else:
                     t.db_len = 0
 
-            self.max_dial_len = max(self.max_dial_len, len(d.turns))
+            self.max_dial_len = max(self.max_dial_len, len(d.turns) * 2)
             self.max_turn_len = max(self.max_turn_len, max([max(len(t.user), len(t.system)) for t in d.turns]))
             self.max_slu_len = max(self.max_slu_len, max([max(len(t.usr_slu), len(t.system_nlu)) for t in d.turns]))
         self.length = len(self._dialogues)

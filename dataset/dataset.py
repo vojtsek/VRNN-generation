@@ -34,10 +34,6 @@ class WordToInt(object):
         for t in sample.turns:
             t.user = [self.embeddings.w2id[tk] for tk in [Embeddings.BOS] + t.user + [Embeddings.EOS]]
             t.system = [self.embeddings.w2id[tk] for tk in [Embeddings.BOS] + t.system + [Embeddings.EOS]]
-            t.usr_slu = [self.embeddings.w2id[Embeddings.BOS]] +\
-                        [self.embeddings.w2id[s.val] for s in t.usr_slu[:len(t.user)-2]] + [self.embeddings.w2id[Embeddings.EOS]]
-            t.sys_nlu = [self.embeddings.w2id[s] for s in [Embeddings.BOS] + t.system_nlu + [Embeddings.EOS]]
-            t.db = min(t.db_len, self.db_max)
         return sample
 
 
@@ -50,33 +46,21 @@ class Padding(object):
         self.pad_token = pad_token
 
     def __call__(self, sample):
-        user_turns = [t.user for t in sample.turns]
-        system_turns = [t.system for t in sample.turns]
-        usr_nlu_turns = [t.usr_slu for t in sample.turns]
-        sys_nlu_turns = [t.sys_nlu for t in sample.turns]
-        db_turns = [[t.db] for t in sample.turns]
+        user_turns = []
+        for t in sample.turns:
+            if len(t.user) > 0:
+                user_turns.append(t.user)
+            if len(t.system) > 0:
+                user_turns.append(t.system)
         user_padded_dial, user_turn_lens = pad_dial(
             user_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
-        system_padded_dial, system_turn_lens = pad_dial(
-            system_turns, self.max_dial_len, self.max_turn_len, self.pad_token)
-        usr_nlu_padded_dial, usr_nlu_turn_lens = pad_dial(
-            usr_nlu_turns, self.max_dial_len, self.max_slu_len, self.pad_token)
-        sys_nlu_padded_dial, sys_nlu_turn_lens = pad_dial(
-            sys_nlu_turns, self.max_dial_len, self.max_slu_len, self.pad_token)
-        db_padded_dial, _ = pad_dial(
-            db_turns, self.max_dial_len, 1, self.pad_token)
 
+#        print('aaa', user_turn_lens)
+ #       print('bbb', user_turns)
         return {
             'user_dials': user_padded_dial,
-            'system_dials': system_padded_dial,
-            'usr_nlu_dials': usr_nlu_padded_dial,
-            'sys_nlu_dials': sys_nlu_padded_dial,
             'user_turn_lens': user_turn_lens,
-            'system_turn_lens': system_turn_lens,
-            'usr_nlu_turn_lens': usr_nlu_turn_lens,
-            'sys_nlu_turn_lens': sys_nlu_turn_lens,
-            'db_dials': db_padded_dial,
-            'dial_len': np.array(len(sample.turns))
+            'dial_len': np.array(len(user_turns))
         }
 
 
@@ -87,13 +71,7 @@ class ToTensor(object):
 
     def __call__(self, sample):
         return (torch.from_numpy(sample['user_dials']).to(self.device),
-                torch.from_numpy(sample['system_dials']).to(self.device),
-                torch.from_numpy(sample['usr_nlu_dials']).to(self.device),
-                torch.from_numpy(sample['sys_nlu_dials']).to(self.device),
                 torch.from_numpy(sample['user_turn_lens']).to(self.device),
-                torch.from_numpy(sample['system_turn_lens']).to(self.device),
-                torch.from_numpy(sample['usr_nlu_turn_lens']).to(self.device),
-                torch.from_numpy(sample['sys_nlu_turn_lens']).to(self.device),
-                torch.from_numpy(sample['db_dials']).to(self.device),
                 torch.from_numpy(sample['dial_len']).to(self.device))
+
 

@@ -193,9 +193,8 @@ class VAECell(torch.nn.Module):
                           encoder_hiddens=encoder_outs), dials_idx
 
     def forward(self,
-                user_dials, user_lens, usr_nlu_lens, sys_nlu_lens,
-                system_dials, system_lens, db_res,
-                previous_vrnn_hidden, user_z_previous, system_z_previous, use_prior, copy_coeff):
+                user_dials, user_lens,
+                previous_vrnn_hidden, user_z_previous, use_prior, copy_coeff):
         # encode user & system utterances
         encoder_init_state = zero_hidden((2,
                                           1 + int(self.config['bidirectional_encoder']),
@@ -203,11 +202,11 @@ class VAECell(torch.nn.Module):
                                           self.config['input_encoder_hidden_size'])).to(self.config['device'])
 
         user_turn_output, user_dials_idx = self._z_module(user_dials,
-                                                          [user_lens, usr_nlu_lens],
+                                                          [user_lens],
                                                           encoder_init_state,
                                                           previous_vrnn_hidden,
                                                           self.user_z_nets,
-                                                          [self.user_dec, self.usr_nlu_dec],
+                                                          [self.user_dec],
                                                           user_z_previous,
                                                           copy_coeff=copy_coeff,
                                                           use_prior=True,

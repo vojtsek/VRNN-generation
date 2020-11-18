@@ -44,43 +44,16 @@ class VRNN(pl.LightningModule):
         self.alpha = config['alpha_coeff_step']
         self.lmbd = config['default_lambda_loss']
 
-    def forward(self, user_dials, system_dials, usr_nlu_dials,
-                sys_nlu_dials, user_lens, system_lens, usr_nlu_lens,
-                sys_nlu_lens, db_res, dial_lens):
+    def forward(self, user_dials, user_lens, dial_lens):
         batch_sort_perm = torch.LongTensor(list(reversed(np.argsort(dial_lens.cpu().numpy())))).to(self.config['device'])
         user_dials = user_dials[batch_sort_perm].transpose(1, 0)
         user_lens = user_lens[batch_sort_perm].transpose(1, 0)
-        usr_nlu_dials = usr_nlu_dials[batch_sort_perm].transpose(1, 0)
-        usr_nlu_lens = usr_nlu_lens[batch_sort_perm].transpose(1, 0)
-        sys_nlu_dials = sys_nlu_dials[batch_sort_perm].transpose(1, 0)
-        sys_nlu_lens = sys_nlu_lens[batch_sort_perm].transpose(1, 0)
-        system_dials = system_dials[batch_sort_perm].transpose(1, 0)
-        system_lens = system_lens[batch_sort_perm].transpose(1, 0)
-        db_res = db_res[batch_sort_perm].transpose(1, 0)
         dial_lens = dial_lens[batch_sort_perm]
 
         user_dials_data, batch_sizes, sorted_indices, unsorted_indices =\
             pack_padded_sequence(user_dials, dial_lens, enforce_sorted=False)
         user_lens_data, _, __, ___ =\
             pack_padded_sequence(user_lens, dial_lens, enforce_sorted=False)
-        usr_nlu_dials_data, batch_sizes, sorted_indices, unsorted_indices = \
-            pack_padded_sequence(usr_nlu_dials, dial_lens, enforce_sorted=False)
-        usr_nlu_lens_data, _, __, ___ = \
-            pack_padded_sequence(usr_nlu_lens, dial_lens, enforce_sorted=False)
-        db_res_data, _, __, ___ = \
-            pack_padded_sequence(db_res, dial_lens, enforce_sorted=False)
-
-        sys_nlu_dials_data, batch_sizes, sorted_indices, unsorted_indices = \
-            pack_padded_sequence(sys_nlu_dials, dial_lens, enforce_sorted=False)
-        sys_nlu_lens_data, _, __, ___ = \
-            pack_padded_sequence(sys_nlu_lens, dial_lens, enforce_sorted=False)
-
-        system_dials_data, x, y, z = \
-            pack_padded_sequence(system_dials, dial_lens, enforce_sorted=False)
-        system_lens_data, _, __, ___ = \
-            pack_padded_sequence(system_lens, dial_lens, enforce_sorted=False)
-
-
         initial_hidden = zero_hidden((2,
                                       self.config['batch_size'],
                                       self.config['vrnn_hidden_size'])).to(self.config['device'])
@@ -112,36 +85,20 @@ class VRNN(pl.LightningModule):
             use_prior = not self.training or np.random.rand(1) > self.config['z_teacher_forcing_prob']
             vae_output = self.vae_cell(user_dials_data[offset:offset+bs],
                                        user_lens_data[offset:offset+bs],
-                                       usr_nlu_lens_data[offset:offset+bs],
-                                       sys_nlu_lens_data[offset:offset+bs],
-                                       system_dials_data[offset:offset+bs],
-                                       system_lens_data[offset:offset+bs],
-                                       db_res_data[offset:offset+bs],
                                        (vrnn_hidden_state[0][:bs], vrnn_hidden_state[1][:bs]),
-                                       user_z_previous[:bs], system_z_previous[:bs],
+                                       user_z_previous[:bs],
                                        use_prior,
                                        copy_coeff)
-            db_data.append(db_res_data[offset:offset+bs])
             offset += bs
 
             user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
-            system_z_previous = self.vae_cell.aggregate(vae_output.system_turn_output.p_z.transpose(1, 0)
-                                                        if use_prior else
-                                                        vae_output.system_turn_output.q_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
-            usr_nlu_outputs.append(vae_output.user_turn_output.decoded_outputs[1])
-            system_outputs.append(vae_output.system_turn_output.decoded_outputs[0])
-            sys_nlu_outputs.append(vae_output.system_turn_output.decoded_outputs[1])
+            p_z_samples_matrix.extend(vae_output.user_turn_output.p_z_samples_lst)
+            q_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
             user_q_zs.extend(vae_output.user_turn_output.q_z)
             user_p_zs.extend(vae_output.user_turn_output.p_z)
-            p_z_samples_matrix.extend(vae_output.system_turn_output.p_z_samples_lst)
-            q_z_samples_matrix.extend(vae_output.system_turn_output.q_z_samples_lst)
             user_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
-            system_q_zs.extend(vae_output.system_turn_output.q_z)
-            system_p_zs.extend(vae_output.system_turn_output.p_z)
-            if self.config['with_bow_loss']:
-                bow_logits_list.extend(vae_output.user_turn_output.bow_logits)
-            z_samples.extend(vae_output.system_turn_output.z_samples)
+            z_samples.extend(vae_output.user_turn_output.z_samples)
 
         for d in to_del:
             del d
@@ -157,21 +114,9 @@ class VRNN(pl.LightningModule):
         return VRNNStepOutput(user_dials=_pad_packed(user_dials_data),
                               user_outputs=user_outputs,
                               user_lens=_pad_packed(user_lens_data),
-                              system_dials=_pad_packed(system_dials_data),
-                              system_outputs=system_outputs,
-                              system_lens=_pad_packed(system_lens_data),
-                              usr_nlu_dials=_pad_packed(usr_nlu_dials_data),
-                              usr_nlu_outputs=usr_nlu_outputs,
-                              usr_nlu_lens=_pad_packed(usr_nlu_lens_data),
-                              sys_nlu_dials=_pad_packed(sys_nlu_dials_data),
-                              sys_nlu_outputs=sys_nlu_outputs,
-                              sys_nlu_lens=_pad_packed(sys_nlu_lens_data),
                               user_q_zs=_pad_packed(user_q_zs),
                               user_p_zs=_pad_packed(user_p_zs),
-                              system_q_zs=_pad_packed(system_q_zs),
-                              system_p_zs=_pad_packed(system_p_zs),
                               z_samples=_pad_packed(z_samples),
-                              bow_logits=_pad_packed(bow_logits_list) if self.config['with_bow_loss'] else None,
                               p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
                               q_z_samples_matrix=_pad_packed(q_z_samples_matrix),
                               user_z_samples_matrix=_pad_packed(user_z_samples_matrix),
@@ -273,8 +218,7 @@ class VRNN(pl.LightningModule):
         self.vae_cell.set_force(force)
 
     def _step(self, batch, optimizer_idx=0):
-        user_dials, system_dials, usr_nlu_dials, sys_nlu_dials, user_lens,\
-        system_lens, usr_nlu_lens, sys_nlu_lens, db_res, dial_lens = batch
+        user_dials, user_lens, dial_lens = batch
         step_output = self.forward(*batch)
         total_user_decoder_loss = self._compute_decoder_ce_loss(step_output.user_outputs,
                                                                 step_output.user_dials,
@@ -388,47 +332,17 @@ class VRNN(pl.LightningModule):
                                            all_user_gt,
                                            inv_vocab)
 
-        self._post_process_forwarded_batch(step_output.usr_nlu_outputs,
-                                           step_output.usr_nlu_dials,
-                                           all_usr_nlu_predictions,
-                                           None,
-                                           all_usr_nlu_gt,
-                                           inv_vocab)
-
-        self._post_process_forwarded_batch(step_output.sys_nlu_outputs,
-                                           step_output.sys_nlu_dials,
-                                           all_sys_nlu_predictions,
-                                           None,
-                                           all_sys_nlu_gt,
-                                           inv_vocab)
-
-        self._post_process_forwarded_batch(step_output.system_outputs,
-                                           step_output.system_dials,
-                                           all_system_predictions,
-                                           all_system_top_scores,
-                                           all_system_gt,
-                                           inv_vocab)
-
         all_samples = torch.argmax(step_output.z_samples, dim=2).cpu().numpy()
         all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).cpu().numpy()
         all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).cpu().numpy()
         all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).cpu().numpy()
-        return PredictedOuputs(all_user_predictions,
-                               all_user_gt,
-                               all_system_predictions,
-                               all_system_gt,
-                               all_usr_nlu_predictions,
-                               all_usr_nlu_gt,
-                               all_sys_nlu_predictions,
-                               all_sys_nlu_gt,
-                               all_user_top_scores,
-                               all_system_top_scores,
-                               all_samples,
-                               all_p_samples_matrix,
-                               all_q_samples_matrix,
-                               all_user_samples_matrix,
-                               step_output.db_data,
-                               step_output)
+        return PredictedOuputs(all_user_predictions=all_user_predictions,
+                               all_user_gt=all_user_gt,
+                               all_user_scores=all_user_top_scores,
+                               all_p_z_samples_matrix=all_p_samples_matrix,
+                               all_q_z_samples_matrix=all_q_samples_matrix,
+                               all_user_z_samples_matrix=all_user_samples_matrix,
+                               raw_step_output=step_output)
 
     def configure_optimizers(self):
         prior_parameters = []
