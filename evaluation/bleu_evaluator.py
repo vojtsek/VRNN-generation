@@ -17,8 +17,8 @@ class BleuEvaluator(Evaluator):
 
         hyp = []
         ref = []
-        for i in enumerate(self.records):
-            if i < len(self.records) - 1:
+        for i, r in enumerate(self.records):
+            if (i < len(self.records) - 1):
                 hyp.append(self.records[i].hyp_utterance)
                 ref.append(self.records[i+1].gt_utterance)
         self.bleu_score = bleu.list_bleu([ref], hyp)

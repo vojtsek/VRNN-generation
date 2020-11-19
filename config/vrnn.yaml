@@ -1,9 +1,9 @@
 # data settings
 data_type: 'raw'
-data_dir: 'VRNN-generation/data/camrest'
-domain: 'camrest'
-#data_dir: 'VRNN-generation/data/smd'
-#domain: 'smd'
+#data_dir: 'VRNN-generation/data/camrest'
+#domain: 'camrest'
+data_dir: 'VRNN-generation/data/smd'
+domain: 'smd'
 #data_dir: 'VRNN-generation/data/multiwoz'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-fake.vec'
@@ -47,7 +47,7 @@ alpha_coeff_step: 0.5
 default_lambda_loss: 1.0
 # layer sizes
 input_encoder_hidden_size: 250
-user_decoder_hidden_size: 200
+user_decoder_hidden_size: 250
 system_decoder_hidden_size: 350
 vrnn_hidden_size: 100
 posterior_ff_sizes1:
@@ -63,5 +63,5 @@ bow_layer_size: 400
 # latent z config
 user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
-user_z_logits_dim: 150
+user_z_logits_dim: 200
 system_z_logits_dim: 10
