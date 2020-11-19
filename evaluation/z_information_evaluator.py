@@ -91,6 +91,9 @@ class ZInfoEvaluator(Evaluator):
         all_tks = []
         all_zs = [[] for _ in range(len(self.prior_z_vocabs))]
         for record in self.records:
+            if record.prior_z_vector is None:
+                print('Record is None')
+                continue
             utt = record.gt_utterance.split()
             all_tks.extend(utt)
             for n, z in enumerate(record.prior_z_vector):
