@@ -419,3 +419,20 @@ class SMDReader:
     def parse_slu(self, slots):
         slu = [Slot(k, v, 'dummy') for k, v in slots.items()]
         return slu
+
+
+class DDReader:
+
+    def parse_dialogues(self, data, delexicalizer=None):
+        for dial in data:
+            dialogue = Dialogue()
+            for t in dial:
+                turn = Turn(delexicalizer)
+                turn.add_user(t['usr'])
+                turn.add_system(t['system'])
+                turn.add_usr_slu([])
+                turn.add_sys_slu([])
+                dialogue.add_turn(turn)
+
+            yield dialogue
+

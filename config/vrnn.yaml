@@ -2,16 +2,18 @@
 data_type: 'raw'
 #data_dir: 'VRNN-generation/data/camrest'
 #domain: 'camrest'
-data_dir: 'VRNN-generation/data/smd'
-domain: 'smd'
+#data_dir: 'VRNN-generation/data/smd'
+#domain: 'smd'
 #data_dir: 'VRNN-generation/data/multiwoz'
 #domain: 'woz-hotel'
+data_dir: 'VRNN-generation/data/daily'
+domain: 'daily'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 20
 delex: true
-device_name: 'cpu:0' # cpu|cuda
+device_name: 'cuda:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
 drop_prob: 0.3
@@ -22,7 +24,7 @@ teacher_forcing_prob: 0.3
 z_teacher_forcing_prob: 0.3
 kl_to_ce: 1
 user_number_z_vectors: 1
-system_number_z_vectors: 8
+system_number_z_vectors: 5
 begin_kl_opt_epoch: 1
 stop_opt_z: 20
 prior_module_recurrent: false
@@ -48,7 +50,7 @@ default_lambda_loss: 1.0
 # layer sizes
 input_encoder_hidden_size: 250
 user_decoder_hidden_size: 100
-system_decoder_hidden_size: 350
+system_decoder_hidden_size: 250
 vrnn_hidden_size: 100
 posterior_ff_sizes1:
   - 200

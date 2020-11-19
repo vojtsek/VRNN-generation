@@ -18,7 +18,7 @@ from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
 
 from .evaluation import ZInfoEvaluator, BleuEvaluator
-from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
+from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, DDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 from .utils import compute_ppl
 from .model import VRNN, EpochEndCb, checkpoint_callback
@@ -72,6 +72,8 @@ def main(flags, config, config_path):
         reader = MultiWOZReader(['hotel'], max_allowed_len=config['max_allowed_turn_len'])
     elif config['domain'] == 'smd':
         reader = SMDReader()
+    elif config['domain'] == 'daily':
+        reader = DDReader()
     for data_set in sets:
         with open(os.path.join(config['data_dir'], f'{data_set}.json'), 'rt') as in_fd:
             data = json.load(in_fd)

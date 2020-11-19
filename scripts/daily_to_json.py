@@ -11,9 +11,11 @@ with open(sys.argv[1], 'rt') as in_fd:
             if last is None:
                 last = utterance
             else:
-                dial.append({'usr': last, 'system': utterance})
+                if len(last) > 0 and len(utterance) > 0:
+                    dial.append({'usr': last, 'system': utterance})
                 last = None
-    data.append(dial)
+        data.append(dial)
+        dial = []
 
 with open(sys.argv[2], 'wt') as out_fd:
     json.dump(data, out_fd)
