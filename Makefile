@@ -33,3 +33,12 @@ smd:
 	cp $(DATA_DIR)/smd/kvret_dev_public.json $(DATA_DIR)/smd/valid.json
 	cp $(DATA_DIR)/smd/kvret_train_public.json $(DATA_DIR)/smd/train.json
 	cp $(DATA_DIR)/smd/kvret_test_public.json $(DATA_DIR)/smd/test.json
+
+daily:
+	mkdir -p $(DATA_DIR)/daily
+	wget "http://yanran.li/files/ijcnlp_dailydialog.zip" -O "$(DATA_DIR)/daily/raw.zip"
+	cd $(DATA_DIR)/daily && unzip raw.zip
+	cd $(DATA_DIR)/daily/ijcnlp_dailydialog && unzip test.zip && unzip train.zip && unzip validation.zip
+	python scripts/daily_to_json.py data/daily/ijcnlp_dailydialog/train/dialogues_train.txt data/daily/train.json
+	python scripts/daily_to_json.py data/daily/ijcnlp_dailydialog/validation/dialogues_validation.txt data/daily/valid.json
+	python scripts/daily_to_json.py data/daily/ijcnlp_dailydialog/test/dialogues_test.txt data/daily/test.json
