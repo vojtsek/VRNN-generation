@@ -185,8 +185,8 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name):
         for d, val_batch in enumerate(loader):
             predictions = model.predict(val_batch)
             score_predictions = model.predict(val_batch, force=True)
-            xent, no_words = compute_ppl(score_predictions.raw_step_output.user_outputs,
-                                         predictions.all_user_gt,
+            xent, no_words = compute_ppl(score_predictions.raw_step_output.user_outputs[1:],
+                                         predictions.all_user_gt[]:-1,
                                          model.embeddings.w2id,
                                          normalize_scores='softmax')
             total_xent += xent
