@@ -243,14 +243,14 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name):
     if model.epoch_number > 0:
         z_evaluator = ZInfoEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
         bleu_evaluator = BleuEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
-        wandb.log({'val_ppl': ppl})
+        wandb.log({dataset_name + '_ppl': ppl})
         mis, mis_sum = z_evaluator.eval_from_dir(output_dir)
         bleu = bleu_evaluator.eval_from_dir(output_dir, role='system')
         for n, mi in enumerate(mis):
-            wandb.log({f'z{n}_MI': mi})
-        wandb.log({'z_MI_avg': np.mean(mis)})
-        wandb.log({'z_MI_sum': float(mis_sum)})
-        wandb.log({'response BLEU': bleu})
+            wandb.log({dataset_name + f'_z{n}_MI': mi})
+        wandb.log({dataset_name + '_z_MI_avg': np.mean(mis)})
+        wandb.log({dataset_name + '_z_MI_sum': float(mis_sum)})
+        wandb.log({dataset_name + '_response BLEU': bleu})
 
 
 if __name__ == '__main__':
