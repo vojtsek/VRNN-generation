@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 
 from . import VAECell
 from ..dataset.embedding import Embeddings
-from ..utils import zero_hidden, exponential_delta
+from ..utils import zero_hidden, exponential_delta, quantize
 
 
 class VRNN(pl.LightningModule):
@@ -336,7 +336,8 @@ class VRNN(pl.LightningModule):
                                            inv_vocab)
 
         all_samples = torch.argmax(step_output.z_samples, dim=2).cpu().numpy()
-        all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).cpu().numpy()
+        #all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).cpu().numpy()
+        all_p_samples_matrix = step_output.p_z_samples_matrix.squeeze(-1).cpu().detach().numpy()
         all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).cpu().numpy()
         all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).cpu().numpy()
         return PredictedOuputs(all_user_predictions=all_user_predictions,

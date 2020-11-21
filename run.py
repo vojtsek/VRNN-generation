@@ -20,7 +20,7 @@ from pytorch_lightning.logging import TensorBoardLogger
 from .evaluation import ZInfoEvaluator, BleuEvaluator
 from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
-from .utils import compute_ppl
+from .utils import compute_ppl, quantize
 from .model import VRNN, EpochEndCb, checkpoint_callback
 
 seed = 42
@@ -198,7 +198,7 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name):
                 print(f'\tUSER HYP:{" ".join(predictions.all_user_predictions[i])}', file=all_fd)
                 print(f'\tUSER SCORES:{" ".join(predictions.all_user_scores[i])}', file=all_fd)
                 print(f'\tUSER GT:{" ".join(predictions.all_user_gt[i])}', file=all_fd)
-                print(f'\tprior Z: {" ".join([str(z) for z in predictions.all_p_z_samples_matrix[i][0]])}', file=all_fd)
+                print(f'\tprior Z: {quantize(predictions.all_p_z_samples_matrix[i][0], model.config["quantization"])}', file=all_fd)
                 print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
 
@@ -226,11 +226,11 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name):
         z_evaluator = ZInfoEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
         bleu_evaluator = BleuEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
         wandb.log({dataset_name + '_ppl': ppl})
-        # mis, mis_sum = z_evaluator.eval_from_dir(output_dir, role='user')
+        mis, mis_sum = z_evaluator.eval_from_dir(output_dir, role='user')
         bleu = bleu_evaluator.eval_from_dir(output_dir, role='user')
         #for n, mi in enumerate(mis):
         #    wandb.log({f'z{n}_MI': mi})
-        #wandb.log({'z_MI_avg': np.mean(mis)})
+        wandb.log({'z_MI_avg': np.mean(mis)})
         #wandb.log({'z_MI_sum': float(mis_sum)})
         wandb.log({dataset_name + '_response BLEU': bleu})
 

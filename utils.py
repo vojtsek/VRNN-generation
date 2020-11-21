@@ -113,3 +113,12 @@ def compute_ppl(prediction_scores, ground_truth, vocab, normalize_scores=None):
         xent += np.sum([np.log(predicted_score[vocab[predicted_word]])
                         for predicted_score, predicted_word in zip(scores, ground_truth[n])])
     return xent, total
+
+def quantize(vec, width):
+    grid = np.array([width * i for i in range(int(1/ width))])
+    def _round(n):
+        dist = np.abs(grid-np.array([n]*len(grid)))
+        return grid[np.argmin(dist)]
+
+    vec = [_round(n) for n in vec]
+    return vec
