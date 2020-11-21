@@ -1,9 +1,9 @@
 # data settings
 data_type: 'raw'
-data_dir: 'VRNN-generation/data/camrest'
-domain: 'camrest'
-#data_dir: 'VRNN-generation/data/smd'
-#domain: 'smd'
+#data_dir: 'VRNN-generation/data/camrest'
+#domain: 'camrest'
+data_dir: 'VRNN-generation/data/smd'
+domain: 'smd'
 #data_dir: 'VRNN-generation/data/multiwoz'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-fake.vec'
