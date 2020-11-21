@@ -1,20 +1,20 @@
 # data settings
 data_type: 'raw'
-#data_dir: 'VRNN-generation/data/camrest'
-#domain: 'camrest'
-data_dir: 'VRNN-generation/data/smd'
-domain: 'smd'
+data_dir: 'VRNN-generation/data/camrest'
+domain: 'camrest'
+#data_dir: 'VRNN-generation/data/smd'
+#domain: 'smd'
 #data_dir: 'VRNN-generation/data/multiwoz'
 #domain: 'woz-hotel'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-fake.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 20
-delex: false
+delex: true
 device_name: 'cpu:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
-quantization: 0.01
+quantization: 0.1
 drop_prob: 0.3
 lr_decay_rate: 0.98
 init_gumbel_softmax_tmp: 2.0

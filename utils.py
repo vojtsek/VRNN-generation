@@ -120,5 +120,5 @@ def quantize(vec, width):
         dist = np.abs(grid-np.array([n]*len(grid)))
         return grid[np.argmin(dist)]
 
-    vec = [_round(n) for n in vec]
+    vec = [int(_round(n) / width) for n in vec]
     return vec
