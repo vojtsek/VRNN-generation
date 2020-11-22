@@ -10,8 +10,8 @@ embedding_fn: 'VRNN-generation/data/embeddings/fasttext-fake.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 20
-delex: true
-device_name: 'cpu:0' # cpu|cuda
+delex: false
+device_name: 'cuda:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
 quantization: 0.1
