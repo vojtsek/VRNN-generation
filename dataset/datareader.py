@@ -84,6 +84,7 @@ class DataReader:
                         state[s.name] = s.val
                     db_result = self.db.search(**state)
                     t.db_len = len(db_result)
+                    t.db_result = db_result
                 else:
                     t.db_len = 0
 
