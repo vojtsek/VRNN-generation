@@ -22,6 +22,7 @@ from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 from .utils import compute_ppl, quantize
 from .model import VRNN, EpochEndCb, checkpoint_callback
+from .add_api_calls import enchance_reader_with_api
 
 seed = 42
 np.random.seed(seed)
@@ -81,6 +82,8 @@ def main(flags, config, config_path):
                                        delexicalizer=delexicalizer,
                                        db_file=os.path.join(config['data_dir'], 'db.json'),
                                        train=1, valid=0)
+        if config['use_db_api']:
+            enchance_reader_with_api(readers[data_set], config['domain'])
 
     if args.output_dir is None:
         print('Output directory not provided, exiting.')

@@ -6,12 +6,14 @@ domain: 'camrest'
 #domain: 'smd'
 #data_dir: 'VRNN-generation/data/multiwoz'
 #domain: 'woz-hotel'
-embedding_fn: 'VRNN-generation/data/embeddings/fasttext-fake.vec'
+#data_dir: 'VRNN-generation/data/daily'
+#domain: 'daily'
+embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 20
 delex: false
-device_name: 'cuda:0' # cpu|cuda
+device_name: 'cpu:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
 quantization: 0.1
@@ -29,13 +31,14 @@ stop_opt_z: 20
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
-#use_copynet: true
-#use_attention: true
-use_copynet: false
-use_attention: false
+use_db_api: true
+use_copynet: true
+use_attention: true
+#use_copynet: false
+#use_attention: false
 with_bpr: false
 with_bow_loss: false
-fake_prior: false
+fake_prior: true
 min_epochs: 40
 max_epochs: 100
 db_cutoff: 3

@@ -85,6 +85,7 @@ class DataReader:
                         state[s.name] = s.val
                     db_result = self.db.search(**state)
                     t.db_len = len(db_result)
+                    t.db_result = db_result
                 else:
                     t.db_len = 0
 
@@ -169,12 +170,14 @@ class Turn:
         if self.delexicalizer is not None:
             utt, _ = self.delexicalizer.delex_utterance(utt)
         self.user = tokenize(utt)
+        self.orig_user = tokenize(utt)
 
     def add_system(self, utt):
         found_tags = []
         if self.delexicalizer is not None:
             utt, found_tags = self.delexicalizer.delex_utterance(utt)
         self.system = tokenize(utt)
+        self.orig_system = tokenize(utt)
         self.system_nlu = list(set(found_tags))
 
     def add_usr_slu(self, usr_slu):
