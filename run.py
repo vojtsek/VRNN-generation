@@ -17,7 +17,7 @@ import numpy as np
 from pytorch_lightning.callbacks import EarlyStopping
 from pytorch_lightning.logging import TensorBoardLogger
 
-from .evaluation import ZInfoEvaluator, BleuEvaluator
+from .evaluation import ZInfoEvaluator, BleuEvaluator, EntityEvaluator
 from .dataset import DataReader, CamRestReader, MultiWOZReader, SMDReader, DDReader, \
     Dataset, ToTensor, Padding, WordToInt, Embeddings, Delexicalizer
 from .utils import compute_ppl
@@ -85,7 +85,7 @@ def main(flags, config, config_path):
                                        db_file=os.path.join(config['data_dir'], 'db.json'),
                                        train=1, valid=0)
         if config['use_db_api']:
-            enchance_reader_with_api(readers[data_set])
+            enchance_reader_with_api(readers[data_set], config['domain'])
 
     if args.output_dir is None:
         print('Output directory not provided, exiting.')
@@ -137,7 +137,9 @@ def main(flags, config, config_path):
     wandb.config.update(config)
     if flags.train_more or flags.model_path is None:
         config['retraining'] = flags.train_more
-        callbacks = [EpochEndCb(), EvaluationCb(output_dir, [valid_dataset, test_dataset])]
+        with open(config['db_file'], 'rt') as fd:
+            db = json.load(fd)
+        callbacks = [EpochEndCb(), EvaluationCb(output_dir, [valid_dataset, test_dataset], db)]
         logger = TensorBoardLogger(os.path.join(output_dir, 'tensorboard'), name='model')
         trainer = pl.Trainer(
             min_epochs=config['min_epochs'],
@@ -150,23 +152,24 @@ def main(flags, config, config_path):
             progress_bar_refresh_rate=1,
             gpus=1 if 'cuda' in config['device_name'] else 0
         )
-        run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid')
+        run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid', db)
         trainer.fit(model)
-        run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid')
+        run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid', db)
 
 
 class EvaluationCb(pl.Callback):
-    def __init__(self, output_dir, datasets):
+    def __init__(self, output_dir, datasets, db):
         self.output_dir = output_dir
         self.datasets = datasets
+        self.db = db
 
     def on_epoch_end(self, trainer, model):
-        run_evaluation(self.output_dir, model, self.datasets[0], model.config['device'], 'valid')
-        run_evaluation(self.output_dir, model, self.datasets[1], model.config['device'], 'test')
+        run_evaluation(self.output_dir, model, self.datasets[0], model.config['device'], 'valid', self.db)
+        run_evaluation(self.output_dir, model, self.datasets[1], model.config['device'], 'test', self.db)
         model.train()
 
 
-def run_evaluation(output_dir, model, dataset, device, dataset_name):
+def run_evaluation(output_dir, model, dataset, device, dataset_name, db=None):
     model.eval()
     model = model.to(device)
     loader = TorchDataLoader(dataset, batch_size=1, shuffle=True)
@@ -246,13 +249,16 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name):
     if model.epoch_number > 0:
         z_evaluator = ZInfoEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
         bleu_evaluator = BleuEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt')
+        entity_evaluator = EntityEvaluator(f'output_all_{model.epoch_number}_{dataset_name}.txt', db)
         wandb.log({'val_ppl': ppl})
         mis, mis_sum = z_evaluator.eval_from_dir(output_dir)
         bleu = bleu_evaluator.eval_from_dir(output_dir, role='system')
+        entity_match = entity_evaluator.eval_from_dir(output_dir, role='system')
         for n, mi in enumerate(mis):
             wandb.log({f'z{n}_MI': mi})
         wandb.log({'z_MI_avg': np.mean(mis)})
         wandb.log({'z_MI_sum': float(mis_sum)})
+        wandb.log({'ent_match': float(entity_match)})
         wandb.log({'response BLEU': bleu})
 
 

@@ -51,7 +51,7 @@ class Delexicalizer:
             for attribute, val in entity.items():
                 if attribute in ['area', 'food', 'pricerange']:
                     continue
-                val = val.lower()
+                val = str(val).lower()
                 if val in utt:
                     self.found_tags.append(self._make_tag(attribute))
                     utt = utt.replace(val, self._make_tag(attribute))

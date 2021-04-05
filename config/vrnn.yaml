@@ -1,17 +1,19 @@
 # data settings
 data_type: 'raw'
-data_dir: 'VRNN-generation/data/camrest'
-domain: 'camrest'
+#data_dir: 'VRNN-generation/data/camrest'
+#domain: 'camrest'
 #data_dir: 'VRNN-generation/data/smd'
 #domain: 'smd'
-#data_dir: 'VRNN-generation/data/multiwoz'
-#domain: 'woz-hotel'
+data_dir: 'VRNN-generation/data/multiwoz'
+domain: 'woz-hotel'
 #data_dir: 'VRNN-generation/data/daily'
 #domain: 'daily'
+db_file: 'VRNN-generation/data/multiwoz/db.json'
+#db_file: 'VRNN-generation/data/camrest/db.json'
 embedding_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.vec'
 embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
-max_allowed_turn_len: 20
+max_allowed_turn_len: 30
 delex: false
 device_name: 'cuda:0' # cpu|cuda
 activation: 'tanh'
@@ -37,9 +39,9 @@ use_attention: true
 #use_attention: false
 with_bpr: false
 with_bow_loss: false
-fake_prior: true
-min_epochs: 40
-max_epochs: 100
+fake_prior: false
+min_epochs: 80
+max_epochs: 120
 db_cutoff: 3
 copy_start_epoch: 5
 # KL before start increasing
@@ -68,4 +70,4 @@ bow_layer_size: 400
 user_z_type: 'cont' # cont| gumbel;
 system_z_type: 'gumbel'
 user_z_logits_dim: 200
-system_z_logits_dim: 10
+system_z_logits_dim: 20

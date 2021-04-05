@@ -1,4 +1,5 @@
 import pickle
+import re
 from collections import Counter
 import json
 import os
@@ -9,15 +10,20 @@ from ..utils import tokenize
 
 
 class JSONDb:
-    def __init__(self, fn):
-        with open(fn, 'rt') as fd:
-            self.data = json.load(fd)
+    def __init__(self, data):
+        if data is not None and isinstance(data, str) and os.path.exists(data):
+            with open(data, 'rt') as fd:
+                self.data = json.load(fd)
+        else:
+            self.data = data
 
     def search(self, **query):
         if 'slot' in query:
             del query['slot']
 
         results = []
+        if len(query) == 0:
+            return []
         for entry in self.data:
             match = all([col in entry and entry[col] == val for col, val in query.items()
                          if col not in ['slot'] and val != 'dontcare'])
@@ -65,6 +71,7 @@ class DataReader:
         return dials
 
     def _parse_data(self, data):
+        db = self.db
         for d in self.reader.parse_dialogues(data, self.delexicalizer):
             if not len(d.turns) > 0:
                 continue
@@ -73,16 +80,18 @@ class DataReader:
 
             self._dialogues.append(d)
             state = {}
+            if hasattr(self.reader, 'db_data'):
+                db = JSONDb(self.reader.db_data)
             for t in d.turns:
                 self.all_words.update(t.user)
                 self.all_words.update(t.system)
                 self.all_words.update([s.val for s in t.usr_slu])
                 self.all_actions.update(set(t.system_nlu))
 
-                if self.db is not None:
+                if db is not None:
                     for s in t.usr_slu:
                         state[s.name] = s.val
-                    db_result = self.db.search(**state)
+                    db_result = db.search(**state)
                     t.db_len = len(db_result)
                     t.db_result = db_result
                 else:
@@ -166,12 +175,16 @@ class Turn:
         self.delexicalizer = delexicalizer
     
     def add_user(self, utt):
-        if self.delexicalizer is not None:
-            utt, _ = self.delexicalizer.delex_utterance(utt)
+        self.orig_user = tokenize(utt)
+      #  if self.delexicalizer is not None:
+      #      utt, _ = self.delexicalizer.delex_utterance(utt)
+        utt = utt.lower()
+        utt = re.sub(r'\d+', '<NUM>', utt)
         self.user = tokenize(utt)
 
     def add_system(self, utt):
         found_tags = []
+        self.orig_system = tokenize(utt)
         if self.delexicalizer is not None:
             utt, found_tags = self.delexicalizer.delex_utterance(utt)
         self.system = tokenize(utt)
@@ -275,6 +288,7 @@ class MultiWOZReader:
                     max_turn_len = max(max_turn_len, len(text.split()))
                 else:
                     turn.add_system(text)
+                    turn.add_usr_slu(self.parse_meta(t['metadata']))
                     if 'sys_action' in t:
                         turn.add_sys_slu(t['sys_action'].split(','))
                     else:
@@ -300,8 +314,17 @@ class MultiWOZReader:
             if max_turn_len < self.max_allowed_len:
                 yield dialogue
 
+    def parse_meta(self, meta):
+        parsed = []
+        for domain, state in meta.items():
+            for slot, val in state['semi'].items():
+                if len(val) > 0 and val not in ['not mentioned', 'dontcare']:
+                    parsed.append(Slot(slot.lower(), val, 'inform'))
+        return parsed
+
     def parse_slu(self, slu):
         usr_slu = []
+        print(slu)
         for intent_domain, val in slu.items():
             domain, intent = intent_domain.split('-')
             intent = intent.lower()
@@ -392,9 +415,12 @@ class CarsluReader:
 class SMDReader:
 
     def parse_dialogues(self, data, delexicalizer=None):
+        self.db_data = []
         for dial in data:
             dialogue = Dialogue()
             turns = dial['dialogue']
+            if dial['scenario']['kb']['items'] is not None:
+                self.db_data.extend(dial['scenario']['kb']['items'])
             last_state = {}
             for t in turns:
                 tt = t['turn']
