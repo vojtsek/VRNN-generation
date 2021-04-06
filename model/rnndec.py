@@ -130,6 +130,8 @@ class RNNDecoder(torch.nn.Module):
                                   copy_coeff)
             outputs.append(output)
             last_decoder = torch.argmax(projected_output, dim=2)
+            if i >= trg_embed.shape[1]:
+                break
             # teacher forcing
             if not self.force and (not self.training or np.random.rand(1) < self.teacher_prob):
                 next_input_idx = last_decoder
