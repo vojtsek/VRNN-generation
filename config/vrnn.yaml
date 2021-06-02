@@ -1,11 +1,11 @@
 # data settings
 data_type: 'raw'
-#data_dir: 'VRNN-generation/data/camrest'
-#domain: 'camrest'
+data_dir: 'VRNN-generation/data/camrest'
+domain: 'camrest'
 #data_dir: 'VRNN-generation/data/smd'
 #domain: 'smd'
-data_dir: 'VRNN-generation/data/multiwoz'
-domain: 'woz-hotel'
+#data_dir: 'VRNN-generation/data/multiwoz'
+#domain: 'woz-hotel'
 #data_dir: 'VRNN-generation/data/daily'
 #domain: 'daily'
 db_file: 'VRNN-generation/data/multiwoz/db.json'
@@ -15,7 +15,7 @@ embedding_out_fn: 'VRNN-generation/data/embeddings/fasttext-wiki.pkl'
 # general settings
 max_allowed_turn_len: 30
 delex: false
-device_name: 'cuda:0' # cpu|cuda
+device_name: 'cpu:0' # cpu|cuda
 activation: 'tanh'
 batch_size: 4
 drop_prob: 0.3
@@ -32,7 +32,7 @@ stop_opt_z: 20
 prior_module_recurrent: false
 gumbel_hard: false
 bidirectional_encoder: true
-use_db_api: true
+use_db_api: false
 use_copynet: true
 use_attention: true
 #use_copynet: false
