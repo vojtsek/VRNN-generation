@@ -190,7 +190,8 @@ class VAECell(torch.nn.Module):
                           bow_logits=bow_logits,
                           sampled_z=sampled_latent,
                           last_encoder_hidden=last_hidden,
-                          encoder_hiddens=encoder_outs), dials_idx
+                          encoder_hiddens=encoder_outs,
+                          ), dials_idx
 
     def forward(self,
                 user_dials, user_lens,

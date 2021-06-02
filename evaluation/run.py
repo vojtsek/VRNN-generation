@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator, PPLEvaluator, EntityEvaluator
+from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator, PPLEvaluator, EntityEvaluator, ClfEvaluator
 
 
 def main(args):
@@ -18,6 +18,8 @@ def main(args):
         evaluators.append(ZSemanticEvaluator(fn, args.test_fn))
     if 'z_info' in metrics:
         evaluators.append(ZInfoEvaluator(fn))
+    if 'clf' in metrics:
+        evaluators.append(ClfEvaluator(fn, args.test_fn))
     if 'ppl' in metrics:
         evaluators.append(PPLEvaluator(fn))
     if 'ent' in metrics:
@@ -35,10 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--work_dir', required=True, type=str)
     parser.add_argument('--fn', required=False, type=str, default=None)
     parser.add_argument('--test_fn', required=False, type=str)
-<<<<<<< HEAD
     parser.add_argument('--role', required=False, type=str, default='system')
-=======
     parser.add_argument('--db_file', required=False, type=str)
->>>>>>> experimental-branch
     args = parser.parse_args()
     main(args)

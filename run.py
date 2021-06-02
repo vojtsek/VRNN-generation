@@ -152,6 +152,7 @@ def main(flags, config, config_path):
             progress_bar_refresh_rate=1,
             gpus=1 if 'cuda' in config['device_name'] else 0
         )
+        wandb.log({'output_dir': output_dir})
         run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid', db)
         trainer.fit(model)
         run_evaluation(output_dir, model, valid_dataset, config['device'], 'valid', db)
@@ -208,6 +209,7 @@ def run_evaluation(output_dir, model, dataset, device, dataset_name, db=None):
                 print(f'\tUSER GT:{" ".join(predictions.all_user_gt[i])}', file=all_fd)
                 print(f'\tprior Z: {" ".join([str(z) for z in quantize(predictions.all_p_z_samples_matrix[i][0], model.config["quantization"])])}', file=all_fd)
                 print(f'\tpost Z: {" ".join([str(z) for z in quantize(predictions.all_p_z_samples_matrix[i][0], model.config["quantization"])])}', file=all_fd)
+                print(f'\tUSER Z: {"_".join([str(h).strip() for h in predictions.raw_step_output.user_q_zs[i][0][0].cpu().detach().numpy()])}', file=all_fd)
                 # print(f'\tpost Z: {" ".join([str(z) for z in predictions.all_q_z_samples_matrix[i][0]])}', file=all_fd)
                 print('-' * 80, file=all_fd)
 

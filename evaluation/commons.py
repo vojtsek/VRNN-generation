@@ -12,7 +12,8 @@ class TurnRecord:
                  posterior_z_vec,
                  hyp_utterance,
                  gt_utterance,
-                 sys_nlu):
+                 sys_nlu,
+                 user_z_vec):
         self.turn_number = turn_number
         self.turn_type = turn_type
         self.prior_z_vector = prior_z_vec
@@ -20,6 +21,7 @@ class TurnRecord:
         self.hyp_utterance = hyp_utterance
         self.gt_utterance = gt_utterance
         self.sys_nlu = sys_nlu
+        self.user_z_vec = user_z_vec
         #sys_nlu = [action for action in sys_nlu if 'booking' not in action.lower()]
         #self.turn_type = sys_nlu[0] if len(sys_nlu) > 0 else 'unk'
 
@@ -43,19 +45,20 @@ class TurnRecord:
             w=0
             for line in in_fd:
                 if '---' in line:
-                    #w += 1
-                   # if (w % 2 == 1):
-                    records.append(TurnRecord(current_turn_number,
-                                              '-'.join(current_turn_type),
-                                              prior_z_vector,
-                                              posterior_z_vector,
-                                              hyp_utterance,
-                                              gt_utterance,
-                                              None))
-                    current_turn_number = None
-                    current_turn_type = []
-                    prior_z_vector = None
-                    posterior_z_vector = None
+                    w += 1
+                    if (w % 2 == 0):
+                        records.append(TurnRecord(current_turn_number,
+                                                  '-'.join(current_turn_type),
+                                                  prior_z_vector,
+                                                  posterior_z_vector,
+                                                  hyp_utterance,
+                                                  gt_utterance,
+                                                  None,
+                                                  user_z_vec))
+                        current_turn_number = None
+                        current_turn_type = []
+                        prior_z_vector = None
+                        posterior_z_vector = None
                 if 'Turn' in line:
                     line = line.split()
                     current_turn_number = int(line[1])
@@ -65,27 +68,14 @@ class TurnRecord:
                 if 'post Z:' in line:
                     line = line.split()
                     posterior_z_vector = [(i, int(n)) for i, n in enumerate(line[2:])]
+                if 'USER Z' in line:
+                    line = line.split()[-1]
+                    user_z_vec = [float(n) for n in line.split('_')]
+
                 # if 'user Z:' in line:
                 #     line = line.split()
                 #     posterior_z_vector = [int(n) for n in line[2:]]
-
                 if role == 'system':
-                    if 'SYS HYP:' in line:
-                        if 'address' in 'line' or 'phone' in line or 'number' in line:
-                            current_turn_type.append('PHONE')
-                        if 'closest' in line or 'miles away' in line:
-                            current_turn_type.append('WHERE')
-                        if 'what city' in line:
-                            current_turn_type.append('ASK-CITY')
-                        if '<name> is a' in line or \
-                                '<name> is located' in line:
-                            current_turn_type.append('OFFER_REST')
-                        if 'thank you' in line or 'bye' in line or 'welcome' in line:
-                            current_turn_type.append('GOODBYE')
-                        if 'there are no' in line:
-                            current_turn_type.append('NO_MATCH')
-                        if len(current_turn_type) == 0:
-                            current_turn_type.append('OTHER')
                     if 'SYS HYP' in line:
                         hyp_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
                     if 'SYS GT' in line:
@@ -107,7 +97,24 @@ class TurnRecord:
                                 slot_map[val].update([' '.join([str(z) for z in z_vector])])
                     if 'USER HYP' in line:
                         hyp_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
+
+
                     if 'USER GT' in line:
+                        if 'address' in 'line' or 'phone' in line or 'number' in line:
+                            current_turn_type.append('PHONE')
+                        if 'closest' in line or 'miles away' in line:
+                            current_turn_type.append('WHERE')
+                        if 'what city' in line:
+                            current_turn_type.append('ASK-CITY')
+                        if '<name> is a' in line or \
+                                '<name> is located' in line:
+                            current_turn_type.append('OFFER_REST')
+                        if 'thank you' in line or 'bye' in line or 'welcome' in line:
+                            current_turn_type.append('GOODBYE')
+                        if 'there are no' in line:
+                            current_turn_type.append('NO_MATCH')
+                        if len(current_turn_type) == 0:
+                            current_turn_type.append('OTHER')
                         gt_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
                 relative_line += 1
 

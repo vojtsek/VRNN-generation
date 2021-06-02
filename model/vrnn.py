@@ -90,6 +90,7 @@ class VRNN(pl.LightningModule):
                                        use_prior,
                                        copy_coeff)
             offset += bs
+            #user_q_zs.append(vae_output.user_turn_output.q_z)
 
             user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
