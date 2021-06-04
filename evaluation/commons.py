@@ -54,7 +54,7 @@ class TurnRecord:
                                                   hyp_utterance,
                                                   gt_utterance,
                                                   None,
-                                                  user_z_vec))
+                                                  None))
                         current_turn_number = None
                         current_turn_type = []
                         prior_z_vector = None

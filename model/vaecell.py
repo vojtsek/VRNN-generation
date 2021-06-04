@@ -42,9 +42,9 @@ class VAECell(torch.nn.Module):
                                                        fake=False)
                                                   for _ in range(config['system_number_z_vectors'])])
         self.user_dec = RNNDecoder(embeddings,
-                                   config['user_z_total_size'] +
+                                   config['encoder_hidden_total_size'],
                                    # self.encoder_hidden_size +
-                                   config['vrnn_hidden_size'],
+                                   # config['vrnn_hidden_size'],
                                    config['user_decoder_hidden_size'],
                                    encoder_hidden_size=self.encoder_hidden_size,
                                    teacher_prob=config['teacher_forcing_prob'],
@@ -131,35 +131,9 @@ class VAECell(torch.nn.Module):
         if copy_dials_idx is None:
             copy_dials_idx = dials_idx
         # concat fw+bw
-        last_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
-        vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
-        prev_z = torch.cat([z_previous, prev_output.last_encoder_hidden], dim=-1)\
-            if prev_output is not None else z_previous
-        posterior_z_samples_lst, q_z_lst, prior_z_samples_lst, p_z_lst =\
-            zip(*[z_net(vrnn_hidden_cat_input,
-                        prev_z,
-                        previous_vrnn_hidden[0]) for z_net in z_nets])
-        if use_prior:
-            sampled_latent = self.aggregate(torch.stack(prior_z_samples_lst))
-        else:
-            sampled_latent = self.aggregate(torch.stack(posterior_z_samples_lst))
-        q_z = torch.stack(q_z_lst)
-        p_z = torch.stack(p_z_lst)
+        decoder_init_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
+        # vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
 
-        z_samples = self.aggregate(torch.stack(prior_z_samples_lst))
-        prior_z_samples_lst = torch.stack(prior_z_samples_lst).transpose(1, 0).transpose(2, 1)
-        posterior_z_samples_lst = torch.stack(posterior_z_samples_lst).transpose(1, 0).transpose(2, 1)
-
-        if prev_output is not None:
-            decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], sampled_latent, db_res.squeeze(1)], dim=1)
-                # [previous_vrnn_hidden[0], last_hidden, prev_z_posterior_projection], dim=1)
-        else:
-            copy_encoder_hiddens = encoder_outs
-            # trick, this is actually the user decoder branch
-            decoder_init_hidden = torch.cat(
-                [previous_vrnn_hidden[0], sampled_latent], dim=1)
-                # [previous_vrnn_hidden[0], last_hidden], dim=1)
         all_decoded_outputs = []
 
         for i, decoder in enumerate(decoders):
@@ -169,7 +143,7 @@ class VAECell(torch.nn.Module):
                         # torch.cat([sampled_latent, db_res.squeeze(1)], dim=-1) if db_res is not None else sampled_latent,
                         db_res.squeeze(1) if db_res is not None else None,
                         torch.max(lens[i]),
-                        copy_encoder_hiddens,
+                        encoder_outs,
                         copy_dials_idx,
                         copy_coeff)
             all_decoded_outputs.append(decoded_outputs)
@@ -182,14 +156,14 @@ class VAECell(torch.nn.Module):
         del db_res
         # torch.cuda.empty_cache()
         return TurnOutput(decoded_outputs=all_decoded_outputs,
-                          q_z=q_z.transpose(1, 0),
-                          p_z=p_z.transpose(1, 0),
-                          z_samples=z_samples,
-                          p_z_samples_lst=prior_z_samples_lst,
-                          q_z_samples_lst=posterior_z_samples_lst,
-                          bow_logits=bow_logits,
-                          sampled_z=sampled_latent,
-                          last_encoder_hidden=last_hidden,
+                          # q_z=q_z.transpose(1, 0),
+                          # p_z=p_z.transpose(1, 0),
+                          # z_samples=z_samples,
+                          # p_z_samples_lst=prior_z_samples_lst,
+                          # q_z_samples_lst=posterior_z_samples_lst,
+                          # bow_logits=bow_logits,
+                          # sampled_z=sampled_latent,
+                          # last_encoder_hidden=last_hidden,
                           encoder_hiddens=encoder_outs,
                           ), dials_idx
 
@@ -215,8 +189,8 @@ class VAECell(torch.nn.Module):
 
         user_sampled_z = user_turn_output.sampled_z
         encoded_inputs = user_turn_output.last_encoder_hidden
-        vrnn_input = torch.cat([user_sampled_z, encoded_inputs], dim=1)
-        next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
+        # vrnn_input = torch.cat([user_sampled_z, encoded_inputs], dim=1)
+        # next_vrnn_hidden = self.vrnn_cell(vrnn_input, previous_vrnn_hidden)
 #        system_turn_output, sys_dials_idx = self._z_module(system_dials,
 #                                                          [system_lens, sys_nlu_lens],
 #                                                          encoder_init_state,
@@ -235,7 +209,7 @@ class VAECell(torch.nn.Module):
 
         del encoder_init_state
         # torch.cuda.empty_cache()
-        return VAECellOutput(next_vrnn_hidden=next_vrnn_hidden,
+        return VAECellOutput(next_vrnn_hidden=previous_vrnn_hidden,
                              user_turn_output=user_turn_output,
                              system_turn_output=user_turn_output)
 

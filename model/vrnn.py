@@ -92,14 +92,14 @@ class VRNN(pl.LightningModule):
             offset += bs
             #user_q_zs.append(vae_output.user_turn_output.q_z)
 
-            user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
+            # user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
             user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
-            p_z_samples_matrix.extend(vae_output.user_turn_output.p_z_samples_lst)
-            q_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
-            user_q_zs.extend(vae_output.user_turn_output.q_z)
-            user_p_zs.extend(vae_output.user_turn_output.p_z)
-            user_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
-            z_samples.extend(vae_output.user_turn_output.z_samples)
+            # p_z_samples_matrix.extend(vae_output.user_turn_output.p_z_samples_lst)
+            # q_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
+            # user_q_zs.extend(vae_output.user_turn_output.q_z)
+            # user_p_zs.extend(vae_output.user_turn_output.p_z)
+            # user_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
+            # z_samples.extend(vae_output.user_turn_output.z_samples)
 
         for d in to_del:
             del d
@@ -115,12 +115,12 @@ class VRNN(pl.LightningModule):
         return VRNNStepOutput(user_dials=_pad_packed(user_dials_data),
                               user_outputs=user_outputs,
                               user_lens=_pad_packed(user_lens_data),
-                              user_q_zs=_pad_packed(user_q_zs),
-                              user_p_zs=_pad_packed(user_p_zs),
-                              z_samples=_pad_packed(z_samples),
-                              p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
-                              q_z_samples_matrix=_pad_packed(q_z_samples_matrix),
-                              user_z_samples_matrix=_pad_packed(user_z_samples_matrix),
+                              # user_q_zs=_pad_packed(user_q_zs),
+                              # user_p_zs=_pad_packed(user_p_zs),
+                              # z_samples=_pad_packed(z_samples),
+                              # p_z_samples_matrix=_pad_packed(p_z_samples_matrix),
+                              # q_z_samples_matrix=_pad_packed(q_z_samples_matrix),
+                              # user_z_samples_matrix=_pad_packed(user_z_samples_matrix),
                               db_data=db_data)
 
     def _compute_decoder_ce_loss(self, outputs, reference, output_lens, pr=False):
@@ -235,8 +235,9 @@ class VRNN(pl.LightningModule):
         batch_sort_perm = torch.LongTensor(list(reversed(np.argsort(dial_lens.cpu().numpy())))).to(self.config['device'])
         dial_lens = dial_lens[batch_sort_perm]
         if self.config['user_z_type'] == 'cont':
+            pass
             # KL loss from N(0, 1)
-            usr_kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
+            # usr_kl_loss = self._compute_vae_kl_loss(step_output.user_q_zs, dial_lens)
         else:
             # KL loss between q_z and p_z
             usr_kl_loss = self._compute_discrete_vae_kl_loss(step_output.user_q_zs, step_output.user_p_zs, dial_lens)
@@ -252,22 +253,22 @@ class VRNN(pl.LightningModule):
                                           total_steps=self.config['min_epochs'],
                                           current_step=max(self.epoch_number - increase_start_epoch, 0))
 
-        usr_kl_loss *= lambda_usr_kl
-        loss = decoder_loss + usr_kl_loss # + .1 * q_penalty
+        # usr_kl_loss *= lambda_usr_kl
+        loss = decoder_loss # + .1 * q_penalty
         # loss = decoder_loss + lambda_usr_kl * usr_kl_loss + lambda_sys_kl * system_kl_loss
     # # print(f'loss {loss}, usr_kl_loss {usr_kl_loss}, total_user_decoder_loss {total_user_decoder_loss}, system_kl_loss {system_kl_loss}, total_system_decoder_loss {total_system_decoder_loss}')
-        return loss, usr_kl_loss, total_user_decoder_loss, usr_kl_loss, total_user_decoder_loss
+        return loss, 0, total_user_decoder_loss, 0, total_user_decoder_loss
 
     def training_step(self, train_batch, batch_idx, optimizer_idx=0):
         loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss =\
             self._step(train_batch, optimizer_idx)
         logs = {'train_total_loss': loss,
-                'train_user_kl_loss': usr_kl_loss,
+                # 'train_user_kl_loss': usr_kl_loss,
                 'train_user_decoder_loss': usr_decoder_loss,
-                'train_system_kl_loss': system_kl_loss,
+                # 'train_system_kl_loss': system_kl_loss,
                 'train_system_decoder_loss': system_decoder_loss,
                 'train_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
-                'train_kl_loss': (usr_kl_loss + system_kl_loss) / 2
+                # 'train_kl_loss': (usr_kl_loss + system_kl_loss) / 2
                 }
         wandb.log(logs)
         return {'loss': loss, 'log': logs}
@@ -275,20 +276,20 @@ class VRNN(pl.LightningModule):
     def validation_step(self, val_batch, batch_idx):
         loss, usr_kl_loss, usr_decoder_loss, system_kl_loss, system_decoder_loss = self._step(val_batch)
         logs = {'valid_total_loss': loss,
-                'valid_user_kl_loss': usr_kl_loss,
+                # 'valid_user_kl_loss': usr_kl_loss,
                 'valid_user_decoder_loss': usr_decoder_loss,
-                'valid_system_kl_loss': system_kl_loss,
+                # 'valid_system_kl_loss': system_kl_loss,
                 'valid_system_decoder_loss': system_decoder_loss,
                 'valid_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
-                'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2
+                # 'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2
                 }
         return {'val_loss': loss,
-                'valid_user_kl_loss': usr_kl_loss,
+                # 'valid_user_kl_loss': usr_kl_loss,
                 'valid_user_decoder_loss': usr_decoder_loss,
-                'valid_system_kl_loss': system_kl_loss,
+                # 'valid_system_kl_loss': system_kl_loss,
                 'valid_system_decoder_loss': system_decoder_loss,
                 'valid_decoder_loss': (usr_decoder_loss + system_decoder_loss) / 2,
-                'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2,
+                # 'valid_kl_loss': (usr_kl_loss + system_kl_loss) / 2,
                 'log': logs}
 
     def validation_end(self, outputs):
@@ -297,7 +298,7 @@ class VRNN(pl.LightningModule):
         # outputs = [{'loss': batch_0_loss}, {'loss': batch_1_loss}, ..., {'loss': batch_n_loss}]
         avg_loss = torch.stack([x['val_loss'] for x in outputs]).mean()
         logs = {metric: torch.stack([x[metric] for x in outputs]).mean()
-                for metric in ['val_loss', 'valid_user_kl_loss', 'valid_system_kl_loss', 'valid_kl_loss',
+                for metric in ['val_loss',
                                'valid_system_decoder_loss', 'valid_decoder_loss']}
         wandb.log(logs)
         for o in outputs:
@@ -336,17 +337,17 @@ class VRNN(pl.LightningModule):
                                            all_user_gt,
                                            inv_vocab)
 
-        all_samples = torch.argmax(step_output.z_samples, dim=2).cpu().numpy()
+        # all_samples = torch.argmax(step_output.z_samples, dim=2).cpu().numpy()
         #all_p_samples_matrix = torch.argmax(step_output.p_z_samples_matrix, dim=2).cpu().numpy()
-        all_p_samples_matrix = step_output.p_z_samples_matrix.squeeze(-1).cpu().detach().numpy()
-        all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).cpu().numpy()
-        all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).cpu().numpy()
+        # all_p_samples_matrix = step_output.p_z_samples_matrix.squeeze(-1).cpu().detach().numpy()
+        # all_q_samples_matrix = torch.argmax(step_output.q_z_samples_matrix, dim=2).cpu().numpy()
+        # all_user_samples_matrix = torch.argmax(step_output.user_z_samples_matrix, dim=2).cpu().numpy()
         return PredictedOuputs(all_user_predictions=all_user_predictions,
                                all_user_gt=all_user_gt,
                                all_user_scores=all_user_top_scores,
-                               all_p_z_samples_matrix=all_p_samples_matrix,
-                               all_q_z_samples_matrix=all_q_samples_matrix,
-                               all_user_z_samples_matrix=all_user_samples_matrix,
+                               # all_p_z_samples_matrix=all_p_samples_matrix,
+                               # all_q_z_samples_matrix=all_q_samples_matrix,
+                               # all_user_z_samples_matrix=all_user_samples_matrix,
                                raw_step_output=step_output)
 
     def configure_optimizers(self):
