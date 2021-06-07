@@ -6,7 +6,7 @@ import wandb
 from . import FFNet, RNNDecoder
 from .z_net import ZNet
 from ..utils import zero_hidden, embed_oh, exponential_delta
-
+from .transformer import Seq2SeqTransformer, create_mask
 torch.manual_seed(0)
 
 
@@ -22,6 +22,12 @@ class VAECell(torch.nn.Module):
         self.vrnn_cell = vrnn_cell
         self.aggregation_layer = torch.nn.Conv1d(in_channels=config['system_number_z_vectors'],
                                                  out_channels=1, kernel_size=1)
+        self.transformer = Seq2SeqTransformer(num_encoder_layers=3,
+                                              num_decoder_layers=3,
+                                              emb_size=self.embeddings.embedding_dim,
+                                              src_vocab_size=len(self.vocab.id2w),
+                                              tgt_vocab_size=len(self.vocab.id2w),
+                                              )
         self.embedding_encoder = torch.nn.LSTM(embedding_dim,
                                                config['input_encoder_hidden_size'],
                                                bidirectional=config['bidirectional_encoder'])
@@ -120,42 +126,28 @@ class VAECell(torch.nn.Module):
         dials_idx = dials
         if db_res is not None:
             db_res = embed_oh(db_res, list(db_res.shape) + [self.config['db_cutoff']+1], device=self.config['device'])
-        dials = self.embeddings(dials).transpose(1, 0)
-        dials_idx_packed = pack_padded_sequence(dials_idx.transpose(1, 0), lens[0], enforce_sorted=False)
-        dials_idx, _ = pad_packed_sequence(dials_idx_packed)
-        dials_idx = dials_idx.transpose(1, 0).contiguous()
-        dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
-        encoder_hidden = (encoder_init_state[0], encoder_init_state[1])
-        encoder_outs, last_encoder_hidden = self.embedding_encoder(dials_packed, encoder_hidden)
-        encoder_outs, _ = pad_packed_sequence(encoder_outs)
-        if copy_dials_idx is None:
-            copy_dials_idx = dials_idx
-        # concat fw+bw
-        decoder_init_hidden = last_encoder_hidden[0].transpose(1, 0).reshape(dials.shape[1], -1)
-        # vrnn_hidden_cat_input = torch.cat([previous_vrnn_hidden[0], last_hidden], dim=1)
 
-        all_decoded_outputs = []
+        dials = dials.transpose(1, 0)
+        src_mask, tgt_mask, src_padding_mask, tgt_padding_mask = create_mask(dials,
+                                                                             dials,
+                                                                             self.vocab.w2id[self.vocab.PAD],
+                                                                             )
+        dials = self.embeddings(dials)
+        # dials_idx_packed = pack_padded_sequence(dials_idx.transpose(1, 0), lens[0], enforce_sorted=False)
+        # dials_idx, _ = pad_packed_sequence(dials_idx_packed)
+        # dials_idx = dials_idx.transpose(1, 0).contiguous()
+        # dials_packed = pack_padded_sequence(dials, lens[0], enforce_sorted=False)
 
-        for i, decoder in enumerate(decoders):
-            outputs, last_decoder_hidden, decoded_outputs =\
-                decoder(dials_idx,
-                        decoder_init_hidden,
-                        # torch.cat([sampled_latent, db_res.squeeze(1)], dim=-1) if db_res is not None else sampled_latent,
-                        db_res.squeeze(1) if db_res is not None else None,
-                        torch.max(lens[i]),
-                        encoder_outs,
-                        copy_dials_idx,
-                        copy_coeff)
-            all_decoded_outputs.append(decoded_outputs)
-
-        if self.config['with_bow_loss']:
-            bow_logits = self.bow_projection(decoder_init_hidden)
-        else:
-            bow_logits = None
-
+        transformer_outputs = self.transformer(dials,
+                                               dials,
+                                               src_mask,
+                                               tgt_mask,
+                                               src_padding_mask,
+                                               tgt_padding_mask,
+                                               src_padding_mask)
         del db_res
         # torch.cuda.empty_cache()
-        return TurnOutput(decoded_outputs=all_decoded_outputs,
+        return TurnOutput(decoded_outputs=transformer_outputs,
                           # q_z=q_z.transpose(1, 0),
                           # p_z=p_z.transpose(1, 0),
                           # z_samples=z_samples,
@@ -164,7 +156,7 @@ class VAECell(torch.nn.Module):
                           # bow_logits=bow_logits,
                           # sampled_z=sampled_latent,
                           # last_encoder_hidden=last_hidden,
-                          encoder_hiddens=encoder_outs,
+                          # encoder_hiddens=encoder_outs,
                           ), dials_idx
 
     def forward(self,

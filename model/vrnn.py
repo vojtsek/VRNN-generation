@@ -93,7 +93,7 @@ class VRNN(pl.LightningModule):
             #user_q_zs.append(vae_output.user_turn_output.q_z)
 
             # user_z_previous = self.vae_cell.aggregate(vae_output.user_turn_output.q_z.transpose(1, 0))
-            user_outputs.append(vae_output.user_turn_output.decoded_outputs[0])
+            user_outputs.append(vae_output.user_turn_output.decoded_outputs)
             # p_z_samples_matrix.extend(vae_output.user_turn_output.p_z_samples_lst)
             # q_z_samples_matrix.extend(vae_output.user_turn_output.q_z_samples_lst)
             # user_q_zs.extend(vae_output.user_turn_output.q_z)
@@ -310,7 +310,7 @@ class VRNN(pl.LightningModule):
     def _post_process_forwarded_batch(self, outputs, reference_dials, predictions, top_scores, ground_truths, inv_vocab):
         for i, output in enumerate(outputs):
             ud_reference = reference_dials[i].transpose(1, 0)[:output.shape[0], :output.shape[1]].cpu().numpy()
-            max_score, max_idx = torch.max(output, dim=2)
+            max_score, max_idx = torch.max(output, dim=1)
             max_idx = max_idx.cpu().numpy()
             max_score = max_score.detach().cpu().numpy()
             if top_scores is not None:
