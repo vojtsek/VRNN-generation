@@ -171,9 +171,9 @@ def create_db_turn(turn, domain):
     db_turn.usr_slu = []
     db_turn.sys_slu = []
     if turn.state is not None:
-        db_turn.user = [slot.val for slot in turn.state]
+        db_turn.user = ['query'] + [slot.val for slot in turn.state if slot not in ['address', 'phone', 'postcode']]
     else:
-        db_turn.user = [slot.val for slot in turn.usr_slu]
+        db_turn.user = ['query'] + [slot.val for slot in turn.usr_slu if slot not in ['address', 'phone', 'postcode']]
     db_turn.system = _format_result(turn.orig_system, turn.db_result)
     return db_turn
 
