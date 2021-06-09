@@ -21,7 +21,7 @@ class TurnRecord:
         self.gt_utterance = gt_utterance
         self.sys_nlu = sys_nlu
         sys_nlu = [action for action in sys_nlu if 'booking' not in action.lower()]
-        self.turn_type = sys_nlu[0] if len(sys_nlu) > 0 else 'unk'
+        # self.turn_type = sys_nlu[0] if len(sys_nlu) > 0 else 'unk'
 
     def __str__(self):
         return f'Turn {self.turn_number}, prior {self.prior_z_vector}, posterior {self.posterior_z_vector}'
@@ -67,7 +67,9 @@ class TurnRecord:
                 #     posterior_z_vector = [int(n) for n in line[2:]]
 
                 if role == 'system':
-                    if 'SYS HYP:' in line:
+                    if 'SYS HYP' in line:
+                        hyp_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
+                    if 'SYS GT' in line:
                         if 'address' in 'line' or 'phone' in line or 'number' in line:
                             current_turn_type.append('PHONE')
                         if 'closest' in line or 'miles away' in line:
@@ -83,9 +85,7 @@ class TurnRecord:
                             current_turn_type.append('NO_MATCH')
                         if len(current_turn_type) == 0:
                             current_turn_type.append('OTHER')
-                    if 'SYS HYP' in line:
-                        hyp_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
-                    if 'SYS GT' in line:
+
                         gt_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
                     if 'SYS NLU' in line:
                         sys_nlu = strip_utterance_special_tokens(':'.join(line.split(':')[1:])).split()

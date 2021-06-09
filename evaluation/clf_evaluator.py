@@ -51,10 +51,10 @@ class ClfEvaluator(Evaluator):
             classes.append(t_tpe)
             t_counter = Counter()
             for record in records:
-                X.append(record.user_z_vec)
+                X.append([r[1]/20 for r in record.prior_z_vector])
                 y.append(t_tpe)
                 all_y_classes.update([t_tpe])
-                t_counter.update([str(i) for i in record.prior_z_vector])
+                t_counter.update([str(i) for i in record.posterior_z_vector])
             print(t_counter.most_common(5))
         clf.fit(X, y)
         X_test, y_test = [], []
@@ -66,7 +66,7 @@ class ClfEvaluator(Evaluator):
             if t_tpe == 'unk':
                 continue
             for record in records:
-                X_test.append(record.user_z_vec)
+                X_test.append([r[1]/20 for r in record.posterior_z_vector])
                 t_tpe = self._label(t_tpe)
                 y_test.append(t_tpe)
 

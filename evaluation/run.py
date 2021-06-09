@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator, PPLEvaluator, EntityEvaluator
+from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator, PPLEvaluator, EntityEvaluator, ClfEvaluator
 
 
 def main(args):
@@ -16,6 +16,8 @@ def main(args):
         evaluators.append(BleuEvaluator(fn))
     if 'z_semantics' in metrics:
         evaluators.append(ZSemanticEvaluator(fn, args.test_fn))
+    if 'clf' in metrics:
+        evaluators.append(ClfEvaluator(fn, args.test_fn))
     if 'z_info' in metrics:
         evaluators.append(ZInfoEvaluator(fn))
     if 'ppl' in metrics:
