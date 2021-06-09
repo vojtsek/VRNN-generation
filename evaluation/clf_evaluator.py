@@ -75,14 +75,3 @@ class ClfEvaluator(Evaluator):
 
         print('DT accuracy:', acc)
         print('majority:', accuracy_score(y_test, [most_common] * len(y_test)))
-        fig = plt.gcf()
-        fig.set_size_inches(30, 18)
-        fig.set_dpi(200)
-        tree.plot_tree(dt_clf,
-                       filled=True,
-                       label='none',
-                       proportion=True,
-                       max_depth=8,
-                       class_names=classes,
-                       fontsize=10)
-        plt.savefig(os.path.join(directory, f'dt.png'), format='png', bbox_inches="tight")
