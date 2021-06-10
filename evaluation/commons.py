@@ -4,6 +4,18 @@ from collections import Counter
 from ..utils import tokenize
 
 
+def parse_query(query, onto):
+    def _delex(tk):
+        for slot, vals in onto.items():
+            if tk in vals:
+                return slot
+        return tk
+    query = [tk for tk in query.split() if tk not in ['query', 'dontcare', 'address', 'phone', 'number', 'postcode']]
+    if onto is not None and len(onto) > 0:
+        query = [_delex(tk) for tk in query]
+    return query
+
+
 class TurnRecord:
     def __init__(self,
                  turn_number,
@@ -12,7 +24,9 @@ class TurnRecord:
                  posterior_z_vec,
                  hyp_utterance,
                  gt_utterance,
-                 sys_nlu):
+                 sys_nlu,
+                 gt_query=None,
+                 hyp_query=None):
         self.turn_number = turn_number
         self.turn_type = turn_type
         self.prior_z_vector = prior_z_vec
@@ -21,22 +35,29 @@ class TurnRecord:
         self.gt_utterance = gt_utterance
         self.sys_nlu = sys_nlu
         sys_nlu = [action for action in sys_nlu if 'booking' not in action.lower()]
+        self.gt_query = gt_query
+        self.hyp_query = hyp_query
         # self.turn_type = sys_nlu[0] if len(sys_nlu) > 0 else 'unk'
 
     def __str__(self):
         return f'Turn {self.turn_number}, prior {self.prior_z_vector}, posterior {self.posterior_z_vector}'
 
     @staticmethod
-    def parse(fn, records, slot_map, role):
+    def parse(fn, records, slot_map, role, onto=None):
         def strip_utterance_special_tokens(utt):
             bos_tk = '<BOS>'
             eos_tk = '<EOS>'
             return utt[utt.find(bos_tk)+len(bos_tk):utt.find(eos_tk)].strip()
 
+        if onto is None:
+            onto = dict()
+
         with open(fn, 'rt') as in_fd:
             current_turn_number = None
             current_turn_type = []
             prior_z_vector = None
+            gt_query = None
+            hyp_query = None
             posterior_z_vector = None
             relative_line = 1
             current_nlu_line = ''
@@ -48,11 +69,15 @@ class TurnRecord:
                                               posterior_z_vector,
                                               hyp_utterance,
                                               gt_utterance,
-                                              sys_nlu))
+                                              sys_nlu,
+                                              gt_query,
+                                              hyp_query))
                     current_turn_number = None
                     current_turn_type = []
                     prior_z_vector = None
                     posterior_z_vector = None
+                    gt_query = None
+                    hyp_query = None
                 if 'Turn' in line:
                     line = line.split()
                     current_turn_number = int(line[1])
@@ -69,21 +94,26 @@ class TurnRecord:
                 if role == 'system':
                     if 'SYS HYP' in line:
                         hyp_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))
+                        if 'query' in line:
+                            hyp_query = parse_query(strip_utterance_special_tokens(':'.join(line.split(':')[1:])), onto)
                     if 'SYS GT' in line:
-                        if 'address' in 'line' or 'phone' in line or 'number' in line:
+                        if 'query' in line:
+                            gt_query = parse_query(strip_utterance_special_tokens(':'.join(line.split(':')[1:])), onto)
+                            current_turn_type.append('QUERY')
+                        elif 'address' in 'line' or 'phone' in line or 'number' in line:
                             current_turn_type.append('PHONE')
-                        if 'closest' in line or 'miles away' in line:
+                        elif 'closest' in line or 'miles away' in line:
                             current_turn_type.append('WHERE')
-                        if 'what city' in line:
+                        elif 'what city' in line:
                             current_turn_type.append('ASK-CITY')
-                        if '<name> is a' in line or \
+                        elif '<name> is a' in line or \
                                 '<name> is located' in line:
                             current_turn_type.append('OFFER_REST')
-                        if 'thank you' in line or 'bye' in line or 'welcome' in line:
+                        elif 'thank you' in line or 'bye' in line or 'welcome' in line:
                             current_turn_type.append('GOODBYE')
-                        if 'there are no' in line:
+                        elif 'there are no' in line:
                             current_turn_type.append('NO_MATCH')
-                        if len(current_turn_type) == 0:
+                        elif len(current_turn_type) == 0:
                             current_turn_type.append('OTHER')
 
                         gt_utterance = strip_utterance_special_tokens(':'.join(line.split(':')[1:]))

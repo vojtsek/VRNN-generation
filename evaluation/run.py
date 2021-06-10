@@ -2,7 +2,7 @@ import argparse
 import json
 import os
 
-from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator, PPLEvaluator, EntityEvaluator, ClfEvaluator
+from . import BleuEvaluator, ZSemanticEvaluator, ZInfoEvaluator, PPLEvaluator, EntityEvaluator, ClfEvaluator, SuccessEvaluator
 
 
 def main(args):
@@ -22,6 +22,8 @@ def main(args):
         evaluators.append(ZInfoEvaluator(fn))
     if 'ppl' in metrics:
         evaluators.append(PPLEvaluator(fn))
+    if 'success' in metrics:
+        evaluators.append(SuccessEvaluator(fn, args.onto))
     if 'ent' in metrics:
         with open(args.db_file, 'rt') as inf:
             db = json.load(inf)
@@ -38,5 +40,6 @@ if __name__ == '__main__':
     parser.add_argument('--fn', required=False, type=str, default=None)
     parser.add_argument('--test_fn', required=False, type=str)
     parser.add_argument('--db_file', required=False, type=str)
+    parser.add_argument('--onto', required=False, type=str)
     args = parser.parse_args()
     main(args)
